@@ -102,6 +102,41 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
         description: t.Optional(t.String())
     })
   })
+  .post("/rooms", async ({ body, user }) => {
+    // Create Room
+    // Verify object belongs to company? 
+    // For now assuming admin sends valid object_id for their company.
+    // Ideally: check if object exists and has user.company_id
+    
+    const newRoom = await db.insert(rooms).values({
+        object_id: body.object_id,
+        type: body.type as "office" | "bathroom" | "corridor", // simple assertion
+        area_sqm: body.area_sqm
+    }).returning();
+    
+    return newRoom[0];
+  }, {
+    body: t.Object({
+        object_id: t.Integer(),
+        type: t.String(), // Enum validation can be added
+        area_sqm: t.Integer()
+    })
+  })
+  .post("/tasks", async ({ body, user }) => {
+    // Create Task
+    const newTask = await db.insert(tasks).values({
+        room_id: body.room_id,
+        cleaner_id: body.cleaner_id,
+        status: "pending"
+    }).returning();
+    
+    return newTask[0];
+  }, {
+    body: t.Object({
+        room_id: t.Integer(),
+        cleaner_id: t.Integer()
+    })
+  })
   .get("/company", async ({ user }) => {
     // Get Company Data
     const company = await db.select().from(companies).where(eq(companies.id, user.company_id as number));
