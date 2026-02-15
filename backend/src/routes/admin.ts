@@ -1,9 +1,9 @@
-import { Elysia, t } from "elysia";
-import { db } from "../database";
-import { users, tasks, rooms, objects, companies } from "../database/schema";
-import { eq, sql, and } from "drizzle-orm";
-import { jwt } from "@elysiajs/jwt";
-import { config } from "../utils/config";
+import {Elysia, t} from "elysia";
+import {db} from "../database";
+import {companies, objects, rooms, tasks, users} from "../database/schema";
+import {and, eq, sql} from "drizzle-orm";
+import {jwt} from "@elysiajs/jwt";
+import {config} from "../utils/config";
 
 export const adminRoutes = new Elysia({ prefix: "/admin" })
   .use(
@@ -67,14 +67,14 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
     return allObjects; 
   })
   .post("/users", async ({ body, user, set }) => {
-    // Invite/Create User
+      const hashedPassword = await Bun.password.hash(body.password);
     const newUser = await db.insert(users).values({
         // @ts-ignore
         company_id: user.company_id,
         name: body.name,
         email: body.email,
         role: body.role,
-        password: body.password // Plain text for now
+        password: hashedPassword
     }).returning();
 
     return newUser[0];
@@ -102,15 +102,19 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
         description: t.Optional(t.String())
     })
   })
-  .post("/rooms", async ({ body, user }) => {
-    // Create Room
-    // Verify object belongs to company? 
-    // For now assuming admin sends valid object_id for their company.
-    // Ideally: check if object exists and has user.company_id
-    
+    .post("/rooms", async ({body, user, set}) => {
+        // verify object belongs to this company
+        const obj = await db.select().from(objects).where(
+            and(eq(objects.id, body.object_id), eq(objects.company_id, user.company_id as number))
+        );
+        if (!obj.length) {
+            set.status = 403;
+            return {message: "Object does not belong to your company"};
+        }
+
     const newRoom = await db.insert(rooms).values({
         object_id: body.object_id,
-        type: body.type as "office" | "bathroom" | "corridor", // simple assertion
+        type: body.type as "office" | "bathroom" | "corridor",
         area_sqm: body.area_sqm
     }).returning();
     
@@ -122,8 +126,24 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
         area_sqm: t.Integer()
     })
   })
-  .post("/tasks", async ({ body, user }) => {
-    // Create Task
+    .post("/tasks", async ({body, user, set}) => {
+        // verify room belongs to this company (room -> object -> company)
+        const room = await db.select().from(rooms)
+            .innerJoin(objects, eq(rooms.object_id, objects.id))
+            .where(and(eq(rooms.id, body.room_id), eq(objects.company_id, user.company_id as number)));
+        if (!room.length) {
+            set.status = 403;
+            return {message: "Room does not belong to your company"};
+        }
+
+        // verify cleaner belongs to this company
+        const cleaner = await db.select().from(users)
+            .where(and(eq(users.id, body.cleaner_id), eq(users.company_id, user.company_id as number)));
+        if (!cleaner.length) {
+            set.status = 403;
+            return {message: "Cleaner does not belong to your company"};
+        }
+
     const newTask = await db.insert(tasks).values({
         room_id: body.room_id,
         cleaner_id: body.cleaner_id,

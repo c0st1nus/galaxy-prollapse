@@ -1,9 +1,9 @@
-import { Elysia, t } from "elysia";
-import { db } from "../database";
-import { tasks, checklists, users, rooms, objects } from "../database/schema";
-import { eq, and } from "drizzle-orm";
-import { jwt } from "@elysiajs/jwt";
-import { config } from "../utils/config";
+import {Elysia, t} from "elysia";
+import {db} from "../database";
+import {checklists, objects, rooms, tasks} from "../database/schema";
+import {and, eq, isNull} from "drizzle-orm";
+import {jwt} from "@elysiajs/jwt";
+import {config} from "../utils/config";
 
 export const supervisorRoutes = new Elysia({ prefix: "/inspections" })
   .use(
@@ -55,32 +55,48 @@ export const supervisorRoutes = new Elysia({ prefix: "/inspections" })
     .where(and(
         eq(tasks.status, "completed"),
         // @ts-ignore
-        eq(objects.company_id, user.company_id)
-        // checking for null checklist
-        // null check depends on how we structure the query result 
+        eq(objects.company_id, user.company_id),
+        isNull(checklists.id)
     ));
-    
-    // Filtering manually for simplicity as Drizzle's isNull with joins can be tricky without alias
-    // @ts-ignore
-    return pendingInspections.filter(row => !row.checklists); 
+
+      return pendingInspections;
   })
   .post("/:task_id", async ({ params, body, user, set }) => {
-    // Create checklist
     const taskId = parseInt(params.task_id);
-    const existing = await db.select().from(checklists).where(eq(checklists.task_id, taskId));
-    if (existing.length > 0) {
-        set.status = 400;
-        return { message: "Inspection already exists" };
+
+      // verify task belongs to same company and is completed
+      const task = await db.select()
+          .from(tasks)
+          .innerJoin(rooms, eq(tasks.room_id, rooms.id))
+          .innerJoin(objects, eq(rooms.object_id, objects.id))
+          .where(and(
+              eq(tasks.id, taskId),
+              eq(tasks.status, "completed"),
+              // @ts-ignore
+              eq(objects.company_id, user.company_id)
+          ));
+      if (!task.length) {
+          set.status = 404;
+          return {message: "Task not found, not completed, or not in your company"};
     }
-    
-    const newTask = await db.insert(checklists).values({
-        task_id: taskId,
-        inspector_id: user.id as number,
-        score: body.score,
-        comment: body.comment
-    }).returning();
-    
-    return newTask[0];
+
+      // unique constraint on task_id prevents duplicates at db level
+      try {
+          const newChecklist = await db.insert(checklists).values({
+              task_id: taskId,
+              inspector_id: user.id as number,
+              score: body.score,
+              comment: body.comment
+          }).returning();
+
+          return newChecklist[0];
+      } catch (err: any) {
+          if (err?.code === "23505") {
+              set.status = 400;
+              return {message: "Inspection already exists"};
+          }
+          throw err;
+      }
   }, {
     body: t.Object({
         score: t.Integer({ minimum: 1, maximum: 5 }),

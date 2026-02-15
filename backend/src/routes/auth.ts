@@ -1,13 +1,10 @@
-import { Elysia, t } from "elysia";
-import { jwt } from "@elysiajs/jwt";
-import { db } from "../database";
-import { users, companies } from "../database/schema";
-import { eq } from "drizzle-orm";
-import { config } from "../utils/config";
+import {Elysia, t} from "elysia";
+import {jwt} from "@elysiajs/jwt";
+import {db} from "../database";
+import {companies, users} from "../database/schema";
+import {eq} from "drizzle-orm";
+import {config} from "../utils/config";
 
-// In a real app, use bcrypt or argon2. For hackathon, simple string match or simple hash if desired.
-// I'll assume plain text or simple comparison for now as no hashing lib is in package.json.
-// The user didn't ask for hashing, but it's best practice. I'll add a comment.
 
 export const authRoutes = new Elysia({ prefix: "/auth" })
   .use(
@@ -19,23 +16,28 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
   .post(
     "/register-company",
     async ({ body, jwt }) => {
-      // 1. Create Company
-      const company = await db.insert(companies).values({
-        name: body.companyName
-      }).returning();
+        const hashedPassword = await Bun.password.hash(body.password);
 
-      if (!company.length) {
-        throw new Error("Failed to create company");
-      }
+        // atomic: company + admin user in one transaction
+        const {company, user} = await db.transaction(async (tx) => {
+            const company = await tx.insert(companies).values({
+                name: body.companyName
+            }).returning();
 
-      // 2. Create Admin User
-      const user = await db.insert(users).values({
-        company_id: company[0].id,
-        name: body.adminName,
-        role: "admin",
-        email: body.email,
-        password: body.password // Plain text for hackathon as requested
-      }).returning();
+            if (!company.length) {
+                throw new Error("Failed to create company");
+            }
+
+            const user = await tx.insert(users).values({
+                company_id: company[0].id,
+                name: body.adminName,
+                role: "admin",
+                email: body.email,
+                password: hashedPassword
+            }).returning();
+
+            return {company, user};
+        });
 
       // 3. Generate Token
       const token = await jwt.sign({
@@ -79,7 +81,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         }
       });
 
-      if (!user || user.password !== body.password) {
+        if (!user || !(await Bun.password.verify(body.password, user.password))) {
         set.status = 401;
         return { message: "Invalid credentials" };
       }

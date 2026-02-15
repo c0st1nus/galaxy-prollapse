@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean, varchar } from "drizzle-orm/pg-core";
+import {integer, pgTable, serial, text, timestamp, unique} from "drizzle-orm/pg-core";
 
 // Companies: id, name, created_at
 export const companies = pgTable("companies", {
@@ -52,7 +52,7 @@ export const checklists = pgTable("checklists", {
   inspector_id: integer("inspector_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
   score: integer("score").notNull(), // 1-5 validation should be handled in app logic or check constraint if supported
   comment: text("comment"),
-});
+}, (table) => [unique("checklists_task_id_unique").on(table.task_id)]);
 
 // Feedback: id, object_id, client_id, rating, text.
 export const feedback = pgTable("feedback", {
