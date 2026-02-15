@@ -25,6 +25,16 @@ export type AdminEfficiencyRow = {
 };
 
 export type ObjectStatusRow = {
+	objectId: number;
+	address: string;
+	description: string | null;
+	totalTasks: number;
+	pendingTasks: number;
+	inProgressTasks: number;
+	completedTasks: number;
+};
+
+export type AdminObjectRow = {
 	id: number;
 	company_id: number;
 	address: string;
@@ -69,6 +79,30 @@ export type PendingInspectionRow = {
 		type: 'office' | 'bathroom' | 'corridor';
 		area_sqm: number;
 	};
+	object: {
+		id: number;
+		company_id: number;
+		address: string;
+		description: string | null;
+	};
+};
+
+export type CleanerTaskFilters = {
+	status?: 'pending' | 'in_progress' | 'completed';
+	date_from?: string;
+	date_to?: string;
+};
+
+export type ClientFeedback = {
+	id: number;
+	object_id: number;
+	client_id: number;
+	rating: number;
+	text: string | null;
+};
+
+export type ClientFeedbackRow = {
+	feedback: ClientFeedback;
 	object: {
 		id: number;
 		company_id: number;
@@ -161,7 +195,7 @@ export function adminCreateUser(
 }
 
 export function adminCreateObject(token: string, input: { address: string; description?: string }) {
-	return request<ObjectStatusRow>('/admin/objects', { method: 'POST', token, body: input });
+	return request<AdminObjectRow>('/admin/objects', { method: 'POST', token, body: input });
 }
 
 export function adminCreateRoom(
@@ -183,8 +217,13 @@ export function adminGetEfficiency(token: string) {
 	return request<AdminEfficiencyRow[]>('/admin/analytics/efficiency', { token });
 }
 
-export function cleanerGetTasks(token: string) {
-	return request<CleanerTaskRow[]>('/tasks/my', { token });
+export function cleanerGetTasks(token: string, filters: CleanerTaskFilters = {}) {
+	const params = new URLSearchParams();
+	if (filters.status) params.set('status', filters.status);
+	if (filters.date_from) params.set('date_from', filters.date_from);
+	if (filters.date_to) params.set('date_to', filters.date_to);
+	const query = params.toString();
+	return request<CleanerTaskRow[]>(`/tasks/my${query ? `?${query}` : ''}`, { token });
 }
 
 export function cleanerStartTask(token: string, taskId: number, photoBefore?: File | null) {
@@ -227,6 +266,44 @@ export function inspectionsCreate(
 			comment: input.comment || undefined
 		}
 	});
+}
+
+export function feedbackGetMy(token: string) {
+	return request<ClientFeedbackRow[]>('/feedback/my', { token });
+}
+
+export function feedbackCreate(
+	token: string,
+	input: { object_id: number; rating: number; text?: string }
+) {
+	return request<ClientFeedback>('/feedback', {
+		method: 'POST',
+		token,
+		body: {
+			object_id: input.object_id,
+			rating: input.rating,
+			text: input.text || undefined
+		}
+	});
+}
+
+export function feedbackUpdate(
+	token: string,
+	feedbackId: number,
+	input: { rating?: number; text?: string }
+) {
+	return request<ClientFeedback>(`/feedback/${feedbackId}`, {
+		method: 'PATCH',
+		token,
+		body: {
+			rating: input.rating,
+			text: input.text
+		}
+	});
+}
+
+export function feedbackDelete(token: string, feedbackId: number) {
+	return request<{ message: string }>(`/feedback/${feedbackId}`, { method: 'DELETE', token });
 }
 
 export function getApiBaseUrl() {
