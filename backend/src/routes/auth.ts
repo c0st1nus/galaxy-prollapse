@@ -20,7 +20,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     "/login",
     async ({ body, jwt, set }) => {
       const user = await db.query.users.findFirst({
-        where: eq(users.phone, body.phone),
+        where: eq(users.email, body.email),
       });
 
       if (!user || user.password !== body.password) {
@@ -44,7 +44,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     },
     {
       body: t.Object({
-        phone: t.String(),
+        email: t.String(),
         password: t.String(),
       }),
     }
