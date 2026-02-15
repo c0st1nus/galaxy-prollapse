@@ -6,6 +6,13 @@ import {jwt} from "@elysiajs/jwt";
 import {config} from "../utils/config";
 import type {JwtPayload} from "../utils/types";
 
+const roleEnum = t.Union([
+    t.Literal("admin"),
+    t.Literal("supervisor"),
+    t.Literal("cleaner"),
+    t.Literal("client"),
+]);
+
 export const adminRoutes = new Elysia({ prefix: "/admin" })
   .use(
     jwt({
@@ -101,16 +108,18 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
         company_id: user.company_id,
         name: body.name,
         email: body.email,
-        role: body.role as "admin" | "supervisor" | "cleaner" | "client",
+        role: body.role,
         password: hashedPassword
     }).returning();
 
-    return newUser[0];
+    // never leak password hashes to clients.
+    const {password, ...safeUser} = newUser[0];
+    return safeUser;
   }, {
     body: t.Object({
         name: t.String(),
         email: t.String(),
-        role: t.String(),
+        role: roleEnum,
         password: t.String()
     })
   })
@@ -164,7 +173,11 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
 
         // verify cleaner belongs to this company
         const cleaner = await db.select().from(users)
-            .where(and(eq(users.id, body.cleaner_id), eq(users.company_id, user.company_id)));
+            .where(and(
+                eq(users.id, body.cleaner_id),
+                eq(users.company_id, user.company_id),
+                eq(users.role, "cleaner")
+            ));
         if (!cleaner.length) {
             set.status = 403;
             return {message: "Cleaner does not belong to your company"};

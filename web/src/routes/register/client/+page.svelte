@@ -1,10 +1,49 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { ROUTES, routeHref } from '$lib/constants/routes';
+	import FlashMessage from '$lib/components/ui/FlashMessage.svelte';
+	import { registerClient } from '$lib/api';
+	import { ROUTES, roleDashboardRoute, routeHref } from '$lib/constants/routes';
 	import { m } from '$lib/paraglide/messages.js';
+	import { setSession } from '$lib/session';
 
 	const inputClass =
 		'mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3 text-base text-[var(--text-main)] placeholder:text-[var(--text-soft)] transition focus:border-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-soft)] sm:text-lg';
+
+	let loading = $state(false);
+	let error = $state('');
+
+	let form = $state({
+		companyName: '',
+		firstName: '',
+		lastName: '',
+		phone: '',
+		email: '',
+		password: '',
+		privacyAccepted: false
+	});
+
+	async function submitRegister(event: SubmitEvent) {
+		event.preventDefault();
+		loading = true;
+		error = '';
+		try {
+			const result = await registerClient({
+				companyName: form.companyName.trim(),
+				firstName: form.firstName.trim(),
+				lastName: form.lastName.trim(),
+				phone: form.phone.trim() || undefined,
+				email: form.email.trim(),
+				password: form.password
+			});
+			setSession(result);
+			await goto(resolve(roleDashboardRoute(result.user.role)));
+		} catch (err) {
+			error = err instanceof Error ? err.message : m.auth_error_generic();
+		} finally {
+			loading = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -103,12 +142,30 @@
 		<section
 			class="float-in rounded-[2rem] border border-[var(--border)] bg-[var(--bg-elevated)]/90 p-5 shadow-[var(--shadow)] backdrop-blur delay-1 sm:p-8 lg:p-10"
 		>
-			<form class="grid gap-4" on:submit|preventDefault>
+			{#if error}
+				<FlashMessage kind="error" text={error} />
+			{/if}
+
+			<form class="mt-4 grid gap-4" onsubmit={submitRegister}>
+				<label class="text-lg font-medium text-[var(--brand)] sm:text-2xl">
+					{m.auth_company_name_label()}
+					<input
+						required
+						class={inputClass}
+						type="text"
+						bind:value={form.companyName}
+						placeholder={m.auth_company_name_placeholder()}
+						autocomplete="organization"
+					/>
+				</label>
+
 				<label class="text-lg font-medium text-[var(--brand)] sm:text-2xl">
 					{m.register_first_name_label()}
 					<input
+						required
 						class={inputClass}
 						type="text"
+						bind:value={form.firstName}
 						placeholder={m.register_first_name_placeholder()}
 						autocomplete="given-name"
 					/>
@@ -117,8 +174,10 @@
 				<label class="text-lg font-medium text-[var(--brand)] sm:text-2xl">
 					{m.register_last_name_label()}
 					<input
+						required
 						class={inputClass}
 						type="text"
+						bind:value={form.lastName}
 						placeholder={m.register_last_name_placeholder()}
 						autocomplete="family-name"
 					/>
@@ -129,6 +188,7 @@
 					<input
 						class={inputClass}
 						type="tel"
+						bind:value={form.phone}
 						placeholder={m.register_phone_placeholder()}
 						autocomplete="tel"
 					/>
@@ -137,8 +197,10 @@
 				<label class="text-lg font-medium text-[var(--brand)] sm:text-2xl">
 					{m.register_email_label()}
 					<input
+						required
 						class={inputClass}
 						type="email"
+						bind:value={form.email}
 						placeholder={m.register_email_placeholder()}
 						autocomplete="email"
 					/>
@@ -147,8 +209,11 @@
 				<label class="text-lg font-medium text-[var(--brand)] sm:text-2xl">
 					{m.register_password_label()}
 					<input
+						required
+						minlength="8"
 						class={inputClass}
 						type="password"
+						bind:value={form.password}
 						placeholder={m.register_password_placeholder()}
 						autocomplete="new-password"
 					/>
@@ -157,6 +222,7 @@
 				<label class="mt-2 flex items-center gap-3 text-base text-[var(--brand)] sm:text-xl">
 					<input
 						type="checkbox"
+						bind:checked={form.privacyAccepted}
 						class="h-5 w-5 rounded border-[var(--border)] accent-[var(--brand)]"
 						required
 					/>
@@ -166,12 +232,13 @@
 				<div class="mt-4 grid gap-3 sm:grid-cols-2">
 					<button
 						type="submit"
+						disabled={loading}
 						class="inline-flex items-center justify-center rounded-xl bg-[var(--brand)] px-6 py-3 text-base font-semibold text-white transition hover:bg-[var(--brand-strong)] sm:text-xl"
 					>
-						{m.register_create_account()}
+						{loading ? m.auth_loading() : m.register_create_account()}
 					</button>
 					<a
-						href={resolve(routeHref(ROUTES.home))}
+						href={resolve(routeHref(ROUTES.auth))}
 						class="inline-flex items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-6 py-3 text-base font-semibold text-[var(--brand)] transition hover:bg-[var(--bg-muted)] sm:text-xl"
 					>
 						{m.register_sign_in()}

@@ -1,4 +1,5 @@
 export type UserRole = 'admin' | 'supervisor' | 'cleaner' | 'client';
+export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 
 export type AuthUser = {
 	id: number;
@@ -41,23 +42,27 @@ export type AdminObjectRow = {
 	description: string | null;
 };
 
+export type AdminRoomRow = {
+	id: number;
+	object_id: number;
+	type: 'office' | 'bathroom' | 'corridor';
+	area_sqm: number;
+};
+
+export type TaskRow = {
+	id: number;
+	room_id: number;
+	cleaner_id: number;
+	status: TaskStatus;
+	photo_before: string | null;
+	photo_after: string | null;
+	timestamp_start: string | null;
+	timestamp_end: string | null;
+};
+
 export type CleanerTaskRow = {
-	task: {
-		id: number;
-		room_id: number;
-		cleaner_id: number;
-		status: 'pending' | 'in_progress' | 'completed';
-		photo_before: string | null;
-		photo_after: string | null;
-		timestamp_start: string | null;
-		timestamp_end: string | null;
-	};
-	room: {
-		id: number;
-		object_id: number;
-		type: 'office' | 'bathroom' | 'corridor';
-		area_sqm: number;
-	};
+	task: TaskRow;
+	room: AdminRoomRow;
 	object: {
 		id: number;
 		company_id: number;
@@ -67,18 +72,8 @@ export type CleanerTaskRow = {
 };
 
 export type PendingInspectionRow = {
-	task: {
-		id: number;
-		room_id: number;
-		cleaner_id: number;
-		status: 'pending' | 'in_progress' | 'completed';
-	};
-	room: {
-		id: number;
-		object_id: number;
-		type: 'office' | 'bathroom' | 'corridor';
-		area_sqm: number;
-	};
+	task: TaskRow;
+	room: AdminRoomRow;
 	object: {
 		id: number;
 		company_id: number;
@@ -88,9 +83,28 @@ export type PendingInspectionRow = {
 };
 
 export type CleanerTaskFilters = {
-	status?: 'pending' | 'in_progress' | 'completed';
+	status?: TaskStatus;
 	date_from?: string;
 	date_to?: string;
+};
+
+export type ChecklistRow = {
+	id: number;
+	task_id: number;
+	inspector_id: number;
+	score: number;
+	comment: string | null;
+};
+
+export type ClientFeedbackObject = {
+	id: number;
+	address: string;
+	description: string | null;
+};
+
+export type AdminDeleteCompanyResult = {
+	message: string;
+	deletedCompany?: Company;
 };
 
 export type ClientFeedback = {
@@ -171,6 +185,17 @@ export function registerCompany(input: {
 	return request<AuthResult>('/auth/register-company', { method: 'POST', body: input });
 }
 
+export function registerClient(input: {
+	companyName: string;
+	firstName: string;
+	lastName: string;
+	phone?: string;
+	email: string;
+	password: string;
+}) {
+	return request<AuthResult>('/auth/register-client', { method: 'POST', body: input });
+}
+
 export function login(input: { email: string; password: string }) {
 	return request<AuthResult>('/auth/login', { method: 'POST', body: input });
 }
@@ -184,7 +209,7 @@ export function adminPatchCompany(token: string, name: string) {
 }
 
 export function adminDeleteCompany(token: string) {
-	return request<{ message: string }>('/admin/company', { method: 'DELETE', token });
+	return request<AdminDeleteCompanyResult>('/admin/company', { method: 'DELETE', token });
 }
 
 export function adminCreateUser(
@@ -202,11 +227,11 @@ export function adminCreateRoom(
 	token: string,
 	input: { object_id: number; type: 'office' | 'bathroom' | 'corridor'; area_sqm: number }
 ) {
-	return request<{ id: number }>('/admin/rooms', { method: 'POST', token, body: input });
+	return request<AdminRoomRow>('/admin/rooms', { method: 'POST', token, body: input });
 }
 
 export function adminCreateTask(token: string, input: { room_id: number; cleaner_id: number }) {
-	return request<{ id: number }>('/admin/tasks', { method: 'POST', token, body: input });
+	return request<TaskRow>('/admin/tasks', { method: 'POST', token, body: input });
 }
 
 export function adminGetObjectsStatus(token: string) {
@@ -231,7 +256,7 @@ export function cleanerStartTask(token: string, taskId: number, photoBefore?: Fi
 	if (photoBefore) {
 		formData.append('photo_before', photoBefore);
 	}
-	return request<{ id: number; status: string }>(`/tasks/${taskId}/start`, {
+	return request<TaskRow>(`/tasks/${taskId}/start`, {
 		method: 'PATCH',
 		token,
 		formData
@@ -243,7 +268,7 @@ export function cleanerCompleteTask(token: string, taskId: number, photoAfter?: 
 	if (photoAfter) {
 		formData.append('photo_after', photoAfter);
 	}
-	return request<{ id: number; status: string }>(`/tasks/${taskId}/complete`, {
+	return request<TaskRow>(`/tasks/${taskId}/complete`, {
 		method: 'PATCH',
 		token,
 		formData
@@ -258,7 +283,7 @@ export function inspectionsCreate(
 	token: string,
 	input: { taskId: number; score: number; comment?: string }
 ) {
-	return request<{ id: number }>('/inspections/' + input.taskId, {
+	return request<ChecklistRow>('/inspections/' + input.taskId, {
 		method: 'POST',
 		token,
 		body: {
@@ -270,6 +295,10 @@ export function inspectionsCreate(
 
 export function feedbackGetMy(token: string) {
 	return request<ClientFeedbackRow[]>('/feedback/my', { token });
+}
+
+export function feedbackGetObjects(token: string) {
+	return request<ClientFeedbackObject[]>('/feedback/objects', { token });
 }
 
 export function feedbackCreate(

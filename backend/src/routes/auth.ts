@@ -2,7 +2,7 @@ import {Elysia, t} from "elysia";
 import {jwt} from "@elysiajs/jwt";
 import {db} from "../database";
 import {companies, users} from "../database/schema";
-import {eq} from "drizzle-orm";
+import {eq, ilike} from "drizzle-orm";
 import {config} from "../utils/config";
 
 
@@ -101,5 +101,75 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         email: t.String(),
         password: t.String(),
       }),
+    }
+  )
+  .post(
+    "/register-client",
+    async ({ body, jwt, set }) => {
+      const companyName = body.companyName.trim();
+      if (!companyName) {
+        set.status = 400;
+        return { message: "Company name is required" };
+      }
+
+      const matchedCompanies = await db.select().from(companies).where(ilike(companies.name, companyName));
+      if (!matchedCompanies.length) {
+        set.status = 404;
+        return { message: "Company not found. Please check the company name with your administrator." };
+      }
+      if (matchedCompanies.length > 1) {
+        set.status = 409;
+        return { message: "Multiple companies matched this name. Contact your administrator." };
+      }
+
+      const hashedPassword = await Bun.password.hash(body.password);
+      const fullName = `${body.firstName.trim()} ${body.lastName.trim()}`.trim();
+      if (!fullName) {
+        set.status = 400;
+        return { message: "Client name is required" };
+      }
+
+      try {
+        const newUser = await db.insert(users).values({
+          company_id: matchedCompanies[0].id,
+          name: fullName,
+          role: "client",
+          email: body.email.trim(),
+          password: hashedPassword
+        }).returning();
+
+        const token = await jwt.sign({
+          id: String(newUser[0].id),
+          role: newUser[0].role,
+          company_id: String(newUser[0].company_id)
+        });
+
+        return {
+          token,
+          user: {
+            id: newUser[0].id,
+            name: newUser[0].name,
+            role: newUser[0].role,
+            company_id: newUser[0].company_id
+          },
+          company: matchedCompanies[0]
+        };
+      } catch (err: any) {
+        if (err?.code === "23505") {
+          set.status = 409;
+          return { message: "Email is already in use" };
+        }
+        throw err;
+      }
+    },
+    {
+      body: t.Object({
+        companyName: t.String(),
+        firstName: t.String(),
+        lastName: t.String(),
+        phone: t.Optional(t.String()),
+        email: t.String(),
+        password: t.String()
+      })
     }
   );
