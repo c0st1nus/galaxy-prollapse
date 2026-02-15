@@ -1,4 +1,5 @@
-import { pgTable, serial, text, integer, timestamp, boolean, varchar } from "drizzle-orm/pg-core";
+import {integer, pgTable, serial, text, timestamp, unique} from "drizzle-orm/pg-core";
+import {relations} from "drizzle-orm";
 
 // Companies: id, name, created_at
 export const companies = pgTable("companies", {
@@ -52,7 +53,7 @@ export const checklists = pgTable("checklists", {
   inspector_id: integer("inspector_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
   score: integer("score").notNull(), // 1-5 validation should be handled in app logic or check constraint if supported
   comment: text("comment"),
-});
+}, (table) => [unique("checklists_task_id_unique").on(table.task_id)]);
 
 // Feedback: id, object_id, client_id, rating, text.
 export const feedback = pgTable("feedback", {
@@ -62,3 +63,44 @@ export const feedback = pgTable("feedback", {
   rating: integer("rating").notNull(),
   text: text("text"),
 });
+
+// drizzle relations (used by db.query and for proper type inference)
+
+export const companiesRelations = relations(companies, ({many}) => ({
+  users: many(users),
+  objects: many(objects),
+}));
+
+export const usersRelations = relations(users, ({one, many}) => ({
+  company: one(companies, {fields: [users.company_id], references: [companies.id]}),
+  tasks: many(tasks),
+  checklists: many(checklists),
+  feedback: many(feedback),
+}));
+
+export const objectsRelations = relations(objects, ({one, many}) => ({
+  company: one(companies, {fields: [objects.company_id], references: [companies.id]}),
+  rooms: many(rooms),
+  feedback: many(feedback),
+}));
+
+export const roomsRelations = relations(rooms, ({one, many}) => ({
+  object: one(objects, {fields: [rooms.object_id], references: [objects.id]}),
+  tasks: many(tasks),
+}));
+
+export const tasksRelations = relations(tasks, ({one}) => ({
+  room: one(rooms, {fields: [tasks.room_id], references: [rooms.id]}),
+  cleaner: one(users, {fields: [tasks.cleaner_id], references: [users.id]}),
+  checklist: one(checklists),
+}));
+
+export const checklistsRelations = relations(checklists, ({one}) => ({
+  task: one(tasks, {fields: [checklists.task_id], references: [tasks.id]}),
+  inspector: one(users, {fields: [checklists.inspector_id], references: [users.id]}),
+}));
+
+export const feedbackRelations = relations(feedback, ({one}) => ({
+  object: one(objects, {fields: [feedback.object_id], references: [objects.id]}),
+  client: one(users, {fields: [feedback.client_id], references: [users.id]}),
+}));
