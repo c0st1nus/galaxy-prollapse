@@ -1,1 +1,55 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+@import 'tailwindcss';
+
+:root {
+	color-scheme: light;
+	--bg-app: #eff3fb;
+	--bg-elevated: #ffffff;
+	--bg-muted: #f4f7ff;
+	--text-main: #132554;
+	--text-soft: #516086;
+	--brand: #2d5ec7;
+	--brand-strong: #1d4eb7;
+	--brand-soft: #d6e1fb;
+	--border: #d6dff4;
+	--shadow: 0 16px 40px rgba(26, 53, 119, 0.12);
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--bg-app: #0e162b;
+	--bg-elevated: #172542;
+	--bg-muted: #1d2e52;
+	--text-main: #e8efff;
+	--text-soft: #afbfdf;
+	--brand: #72a3ff;
+	--brand-strong: #8ab5ff;
+	--brand-soft: #2b3d66;
+	--border: #32466e;
+	--shadow: 0 20px 45px rgba(2, 8, 20, 0.45);
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	min-height: 100%;
+}
+
+body {
+	margin: 0;
+	font-family: 'Manrope', 'Segoe UI', sans-serif;
+	color: var(--text-main);
+	background:
+		radial-gradient(1000px 500px at 100% -120px, rgba(118, 151, 230, 0.2), transparent 60%),
+		radial-gradient(800px 420px at -10% 85%, rgba(104, 144, 240, 0.18), transparent 60%),
+		var(--bg-app);
+}
+
+a {
+	color: inherit;
+}
