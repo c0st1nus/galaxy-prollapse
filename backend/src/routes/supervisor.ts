@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import { db } from "../database";
-import { tasks, checklists, users } from "../database/schema";
+import { tasks, checklists, users, rooms, objects } from "../database/schema";
 import { eq, and } from "drizzle-orm";
 import { jwt } from "@elysiajs/jwt";
 import { config } from "../utils/config";
@@ -32,7 +32,7 @@ export const supervisorRoutes = new Elysia({ prefix: "/inspections" })
     }
     return { user: profile };
   })
-  .get("/pending", async () => {
+  .get("/pending", async ({ user }) => {
     // Tasks that are completed but not yet inspected?
     // or tasks that are completed and don't have a checklist?
     // User request: "GET /inspections/pending — Список завершенных работ, требующих проверки."
@@ -44,13 +44,18 @@ export const supervisorRoutes = new Elysia({ prefix: "/inspections" })
     // Better: Left join checklists, filter where checklist.id is null.
     
     const pendingInspections = await db.select({
-        task: tasks
-        // can add other fields
+        task: tasks,
+        room: rooms,
+        object: objects
     })
     .from(tasks)
+    .innerJoin(rooms, eq(tasks.room_id, rooms.id))
+    .innerJoin(objects, eq(rooms.object_id, objects.id))
     .leftJoin(checklists, eq(tasks.id, checklists.task_id))
     .where(and(
         eq(tasks.status, "completed"),
+        // @ts-ignore
+        eq(objects.company_id, user.company_id)
         // checking for null checklist
         // null check depends on how we structure the query result 
     ));
