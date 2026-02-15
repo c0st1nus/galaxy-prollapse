@@ -1,16 +1,21 @@
 export const ui = {
-	panel:
-		'rounded-3xl border border-[var(--border)] bg-[var(--bg-elevated)] p-6 shadow-[var(--shadow)]',
-	panelSm:
-		'rounded-3xl border border-[var(--border)] bg-[var(--bg-elevated)] p-6 shadow-[var(--shadow)] sm:p-8',
-	input:
-		'rounded-xl border border-[var(--border)] bg-[var(--bg-muted)] px-4 py-2.5 text-[var(--text-main)] focus:border-[var(--brand)] focus:outline-none',
-	primaryButton:
-		'rounded-xl bg-[var(--brand)] px-4 py-2 font-semibold text-white transition hover:bg-[var(--brand-strong)] disabled:opacity-60',
-	secondaryButton:
-		'rounded-xl border border-[var(--border)] bg-[var(--bg-muted)] px-4 py-2 font-semibold transition hover:bg-[var(--bg-elevated)] disabled:opacity-60',
-	label: 'grid gap-1 text-sm font-semibold text-[var(--text-soft)]',
-	alertSuccess:
-		'mt-5 rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-emerald-800',
-	alertError: 'mt-5 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-red-800'
+	page: 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10',
+	panel: 'surface-card p-5 sm:p-6',
+	panelSm: 'surface-card p-6 sm:p-8',
+	label: 'grid gap-1.5 text-sm font-semibold text-[var(--text-soft)]',
+	input: 'field-control',
+	inputWithIcon: 'field-with-icon',
+	inputIcon: 'field-icon h-4 w-4',
+	inputPadded: 'field-control field-control-with-icon',
+	textarea: 'field-control min-h-24 resize-y',
+	primaryButton: 'btn btn-primary',
+	secondaryButton: 'btn btn-secondary',
+	ghostButton: 'btn btn-ghost',
+	dangerButton: 'btn btn-danger',
+	alertSuccess: 'alert alert-success',
+	alertError: 'alert alert-error',
+	tableWrap: 'table-shell',
+	table: 'table-base',
+	sectionTitle: 'flex items-center gap-2 text-2xl font-extrabold',
+	sectionLead: 'mt-2 text-[var(--text-soft)]'
 } as const;

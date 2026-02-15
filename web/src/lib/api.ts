@@ -60,6 +60,104 @@ export type TaskRow = {
 	timestamp_end: string | null;
 };
 
+export type TaskAiStatus = 'not_requested' | 'pending' | 'succeeded' | 'failed';
+
+export type TaskAiRating = {
+	task_id: number;
+	ai_status: TaskAiStatus;
+	ai_model?: string | null;
+	ai_score?: number | null;
+	ai_feedback?: string | null;
+	ai_raw?: Record<string, unknown> | null;
+	ai_rated_at?: string | null;
+};
+
+export type TaskChecklistItem = {
+	id: string;
+	title: string;
+	done: boolean;
+	note?: string;
+};
+
+export type TaskChecklist = {
+	task_id: number;
+	template_id?: number | null;
+	room_type?: 'office' | 'bathroom' | 'corridor' | null;
+	cleaning_standard?: string | null;
+	items: TaskChecklistItem[];
+	completion_percent: number;
+	updated_at?: string | null;
+};
+
+export type SyncOperationStatus = 'applied' | 'duplicate' | 'rejected' | 'retryable_error';
+
+export type SyncOperationType = 'start_task' | 'update_checklist' | 'complete_task';
+
+export type SyncBatchOperation = {
+	client_operation_id: string;
+	task_id: number;
+	operation_type: SyncOperationType;
+	payload: Record<string, unknown>;
+};
+
+export type SyncBatchOperationResult = {
+	client_operation_id: string;
+	status: SyncOperationStatus;
+	applied?: boolean;
+	error_code?: string | null;
+	error_message?: string | null;
+};
+
+export type SyncBatchResult = {
+	results: SyncBatchOperationResult[];
+};
+
+export type SyncStatus = {
+	last_processed_operation_id?: string | null;
+	pending_count?: number;
+	failed_count?: number;
+	oldest_pending_age_seconds?: number;
+};
+
+export type QualityAnalyticsRow = {
+	label: string;
+	value: number;
+	aux?: number;
+};
+
+export type GeofenceAnalyticsRow = {
+	label: string;
+	violations: number;
+	rate: number;
+	median_distance_meters?: number;
+};
+
+export type SyncAnalyticsRow = {
+	label: string;
+	success_rate: number;
+	retry_rate: number;
+	duplicate_rate: number;
+	failed_backlog?: number;
+};
+
+export type AICostAnalyticsRow = {
+	model: string;
+	request_count: number;
+	estimated_input_tokens: number;
+	estimated_output_tokens: number;
+	estimated_cost_usd: number;
+};
+
+export type ChecklistTemplateRow = {
+	id: number;
+	room_type: 'office' | 'bathroom' | 'corridor';
+	cleaning_standard: string;
+	version: number;
+	items: TaskChecklistItem[];
+	created_at?: string;
+	updated_at?: string;
+};
+
 export type CleanerTaskRow = {
 	task: TaskRow;
 	room: AdminRoomRow;
@@ -251,10 +349,33 @@ export function cleanerGetTasks(token: string, filters: CleanerTaskFilters = {})
 	return request<CleanerTaskRow[]>(`/tasks/my${query ? `?${query}` : ''}`, { token });
 }
 
-export function cleanerStartTask(token: string, taskId: number, photoBefore?: File | null) {
+export function cleanerStartTask(
+	token: string,
+	taskId: number,
+	input?:
+		| File
+		| null
+		| {
+				photoBefore?: File | null;
+				latitude?: number;
+				longitude?: number;
+				client_operation_id?: string;
+		  }
+) {
+	const payload =
+		input instanceof File || input === null || input === undefined ? { photoBefore: input } : input;
 	const formData = new FormData();
-	if (photoBefore) {
-		formData.append('photo_before', photoBefore);
+	if (payload.photoBefore) {
+		formData.append('photo_before', payload.photoBefore);
+	}
+	if (typeof payload.latitude === 'number') {
+		formData.append('latitude', String(payload.latitude));
+	}
+	if (typeof payload.longitude === 'number') {
+		formData.append('longitude', String(payload.longitude));
+	}
+	if (payload.client_operation_id) {
+		formData.append('client_operation_id', payload.client_operation_id);
 	}
 	return request<TaskRow>(`/tasks/${taskId}/start`, {
 		method: 'PATCH',
@@ -263,10 +384,33 @@ export function cleanerStartTask(token: string, taskId: number, photoBefore?: Fi
 	});
 }
 
-export function cleanerCompleteTask(token: string, taskId: number, photoAfter?: File | null) {
+export function cleanerCompleteTask(
+	token: string,
+	taskId: number,
+	input?:
+		| File
+		| null
+		| {
+				photoAfter?: File | null;
+				latitude?: number;
+				longitude?: number;
+				client_operation_id?: string;
+		  }
+) {
+	const payload =
+		input instanceof File || input === null || input === undefined ? { photoAfter: input } : input;
 	const formData = new FormData();
-	if (photoAfter) {
-		formData.append('photo_after', photoAfter);
+	if (payload.photoAfter) {
+		formData.append('photo_after', payload.photoAfter);
+	}
+	if (typeof payload.latitude === 'number') {
+		formData.append('latitude', String(payload.latitude));
+	}
+	if (typeof payload.longitude === 'number') {
+		formData.append('longitude', String(payload.longitude));
+	}
+	if (payload.client_operation_id) {
+		formData.append('client_operation_id', payload.client_operation_id);
 	}
 	return request<TaskRow>(`/tasks/${taskId}/complete`, {
 		method: 'PATCH',
@@ -291,6 +435,143 @@ export function inspectionsCreate(
 			comment: input.comment || undefined
 		}
 	});
+}
+
+export function cleanerGetTaskChecklist(token: string, taskId: number) {
+	return request<TaskChecklist>(`/tasks/${taskId}/checklist`, { token });
+}
+
+export function cleanerPatchTaskChecklist(
+	token: string,
+	taskId: number,
+	input: {
+		items: TaskChecklistItem[];
+		client_operation_id?: string;
+	}
+) {
+	return request<TaskChecklist>(`/tasks/${taskId}/checklist`, {
+		method: 'PATCH',
+		token,
+		body: input
+	});
+}
+
+export function cleanerGetTaskAiRating(token: string, taskId: number) {
+	return request<TaskAiRating>(`/tasks/${taskId}/ai-rating`, { token });
+}
+
+export function syncBatchOperations(token: string, operations: SyncBatchOperation[]) {
+	return request<SyncBatchResult>('/sync/operations/batch', {
+		method: 'POST',
+		token,
+		body: { operations }
+	});
+}
+
+export function syncGetStatus(token: string) {
+	return request<SyncStatus>('/sync/status', { token });
+}
+
+export function inspectionsGetTaskAiRating(token: string, taskId: number) {
+	return request<TaskAiRating>(`/inspections/${taskId}/ai-rating`, { token });
+}
+
+export function inspectionsRunTaskAiRating(token: string, taskId: number) {
+	return request<TaskAiRating>(`/inspections/${taskId}/ai-rate`, {
+		method: 'POST',
+		token
+	});
+}
+
+export function inspectionsGetAnalyticsQuality(token: string) {
+	return request<QualityAnalyticsRow[]>('/inspections/analytics/quality', { token });
+}
+
+export function inspectionsGetAnalyticsGeofence(token: string) {
+	return request<GeofenceAnalyticsRow[]>('/inspections/analytics/geofence', { token });
+}
+
+export function inspectionsGetAnalyticsSync(token: string) {
+	return request<SyncAnalyticsRow[]>('/inspections/analytics/sync', { token });
+}
+
+export function adminPatchObjectLocation(
+	token: string,
+	objectId: number,
+	input: { latitude: number; longitude: number; geofence_radius_meters?: number }
+) {
+	return request<{
+		id: number;
+		latitude: number;
+		longitude: number;
+		geofence_radius_meters: number;
+	}>(`/admin/objects/${objectId}/location`, {
+		method: 'PATCH',
+		token,
+		body: input
+	});
+}
+
+export function adminPatchObjectCleaningStandard(
+	token: string,
+	objectId: number,
+	cleaning_standard: string
+) {
+	return request<{ id: number; cleaning_standard: string }>(
+		`/admin/objects/${objectId}/cleaning-standard`,
+		{
+			method: 'PATCH',
+			token,
+			body: { cleaning_standard }
+		}
+	);
+}
+
+export function adminGetChecklistTemplates(token: string) {
+	return request<ChecklistTemplateRow[]>('/admin/checklist-templates', { token });
+}
+
+export function adminCreateChecklistTemplate(
+	token: string,
+	input: {
+		room_type: 'office' | 'bathroom' | 'corridor';
+		cleaning_standard: string;
+		version?: number;
+		items: TaskChecklistItem[];
+	}
+) {
+	return request<ChecklistTemplateRow>('/admin/checklist-templates', {
+		method: 'POST',
+		token,
+		body: input
+	});
+}
+
+export function adminPatchChecklistTemplate(
+	token: string,
+	templateId: number,
+	input: {
+		items?: TaskChecklistItem[];
+		version?: number;
+	}
+) {
+	return request<ChecklistTemplateRow>(`/admin/checklist-templates/${templateId}`, {
+		method: 'PATCH',
+		token,
+		body: input
+	});
+}
+
+export function adminGetAnalyticsQuality(token: string) {
+	return request<QualityAnalyticsRow[]>('/admin/analytics/quality', { token });
+}
+
+export function adminGetAnalyticsSync(token: string) {
+	return request<SyncAnalyticsRow[]>('/admin/analytics/sync', { token });
+}
+
+export function adminGetAnalyticsAICost(token: string) {
+	return request<AICostAnalyticsRow[]>('/admin/analytics/ai-cost', { token });
 }
 
 export function feedbackGetMy(token: string) {
