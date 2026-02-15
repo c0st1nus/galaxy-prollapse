@@ -1,7 +1,7 @@
 import {Elysia, t} from "elysia";
 import {db} from "../database";
 import {feedback, objects} from "../database/schema";
-import {and, eq} from "drizzle-orm";
+import {and, asc, eq} from "drizzle-orm";
 import {jwt} from "@elysiajs/jwt";
 import {config} from "../utils/config";
 import type {JwtPayload} from "../utils/types";
@@ -35,6 +35,19 @@ export const feedbackRoutes = new Elysia({prefix: "/feedback"})
             throw new Error("Forbidden: only clients can manage feedback");
         }
         return {user};
+    })
+    // list available objects for this client's company (for feedback creation UI)
+    .get("/objects", async ({user}) => {
+        const result = await db.select({
+            id: objects.id,
+            address: objects.address,
+            description: objects.description,
+        })
+            .from(objects)
+            .where(eq(objects.company_id, user.company_id))
+            .orderBy(asc(objects.id));
+
+        return result;
     })
     // list feedback left by this client
     .get("/my", async ({user}) => {

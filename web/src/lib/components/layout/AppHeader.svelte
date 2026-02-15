@@ -2,23 +2,42 @@
 	import { env } from '$env/dynamic/public';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
-	import { ROUTES, routeHref, type AppRoute } from '$lib/constants/routes';
+	import { onDestroy, onMount } from 'svelte';
+	import { ROUTES, roleDashboardRoute, routeHref, type AppRoute } from '$lib/constants/routes';
 	import { m } from '$lib/paraglide/messages.js';
 	import { deLocalizeUrl, locales, setLocale } from '$lib/paraglide/runtime.js';
+	import { initSession, session, type SessionState } from '$lib/session';
 
 	type Theme = 'light' | 'dark';
-
-	const navItems: Array<{ path: AppRoute; label: () => string }> = [
-		{ path: ROUTES.home, label: () => m.nav_home() },
-		{ path: ROUTES.auth, label: () => m.nav_auth() },
-		{ path: ROUTES.app, label: () => m.nav_app() },
-		{ path: ROUTES.registerClient, label: () => m.nav_register_client() },
-		{ path: ROUTES.demo, label: () => m.nav_demo() },
-		...(env.PUBLIC_ENABLE_DEV_UI === '1' ? [{ path: ROUTES.dev, label: () => 'DEV' }] : [])
-	];
+	const showDevUi = env.PUBLIC_ENABLE_DEV_UI === '1';
 
 	let theme = $state<Theme>('light');
+	let currentSession = $state<SessionState | null>(null);
+	let unsubscribe: (() => void) | null = null;
+
+	const navItems = $derived.by(() => {
+		const items: Array<{ path: AppRoute; label: () => string }> = [
+			{ path: ROUTES.home, label: () => m.nav_home() }
+		];
+
+		if (currentSession) {
+			items.push({
+				path: roleDashboardRoute(currentSession.user.role),
+				label: () => m.nav_app()
+			});
+		} else {
+			items.push({ path: ROUTES.auth, label: () => m.nav_auth() });
+		}
+
+		if (showDevUi) {
+			items.push(
+				{ path: ROUTES.demo, label: () => m.nav_demo() },
+				{ path: ROUTES.dev, label: () => 'DEV' }
+			);
+		}
+
+		return items;
+	});
 
 	function applyTheme(next: Theme, persist = true) {
 		theme = next;
@@ -50,12 +69,21 @@
 	}
 
 	onMount(() => {
+		initSession();
+		unsubscribe = session.subscribe((next) => {
+			currentSession = next;
+		});
+
 		// sync theme with saved choice and system preference on first paint.
 		const saved = window.localStorage.getItem('tt-theme');
 		const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 		const initial: Theme =
 			saved === 'dark' || saved === 'light' ? saved : systemPrefersDark ? 'dark' : 'light';
 		applyTheme(initial, false);
+	});
+
+	onDestroy(() => {
+		if (unsubscribe) unsubscribe();
 	});
 </script>
 

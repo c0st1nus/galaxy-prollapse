@@ -1,11 +1,17 @@
 import {Elysia, t} from "elysia";
 import {db} from "../database";
 import {objects, rooms, tasks} from "../database/schema";
-import {and, eq, gte, lte, SQL} from "drizzle-orm";
+import {and, eq, gte, lt, SQL} from "drizzle-orm";
 import {jwt} from "@elysiajs/jwt";
 import {config} from "../utils/config";
 import {uploadFile} from "../services/storage";
 import type {JwtPayload} from "../utils/types";
+
+function parseDateOnly(value: string) {
+    const [year, month, day] = value.split("-").map((part) => Number(part));
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day);
+}
 
 export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
   .use(
@@ -51,10 +57,18 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
 
         // optional date range filter (on timestamp_start)
         if (query.date_from) {
-            conditions.push(gte(tasks.timestamp_start, new Date(query.date_from)));
+            const dateFrom = parseDateOnly(query.date_from);
+            if (dateFrom) {
+                conditions.push(gte(tasks.timestamp_start, dateFrom));
+            }
         }
         if (query.date_to) {
-            conditions.push(lte(tasks.timestamp_start, new Date(query.date_to)));
+            const dateTo = parseDateOnly(query.date_to);
+            if (dateTo) {
+                // treat date_to as end of day by filtering to next-day exclusive boundary.
+                dateTo.setDate(dateTo.getDate() + 1);
+                conditions.push(lt(tasks.timestamp_start, dateTo));
+            }
         }
 
     const result = await db.select({

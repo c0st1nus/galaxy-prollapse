@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TinyTidy</string>
+    <string name="title_activity_main">TinyTidy</string>
+    <string name="package_name">com.tinytidy.app</string>
+    <string name="custom_url_scheme">com.tinytidy.app</string>
+</resources>

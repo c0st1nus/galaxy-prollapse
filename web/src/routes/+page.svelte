@@ -7,14 +7,12 @@
 		{
 			icon: '🧾',
 			title: () => m.home_audience_clients_title(),
-			description: () => m.home_audience_clients_desc(),
-			cta: () => m.home_audience_clients_cta()
+			description: () => m.home_audience_clients_desc()
 		},
 		{
 			icon: '🏢',
 			title: () => m.home_audience_companies_title(),
-			description: () => m.home_audience_companies_desc(),
-			cta: () => m.home_audience_companies_cta()
+			description: () => m.home_audience_companies_desc()
 		}
 	];
 
@@ -67,16 +65,17 @@
 				class="mt-8 inline-flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow)] sm:flex-row"
 			>
 				<a
-					href={resolve(routeHref(ROUTES.registerClient))}
+					href={resolve(routeHref(ROUTES.auth))}
 					class="inline-flex items-center justify-center bg-[var(--brand)] px-6 py-4 text-base font-semibold text-white transition hover:bg-[var(--brand-strong)]"
+				>
+					{m.home_cta_companies()}
+				</a>
+				<a
+					href={resolve(routeHref(ROUTES.registerClient))}
+					class="inline-flex items-center justify-center px-5 py-3 text-sm font-semibold text-[var(--text-soft)] transition hover:bg-[var(--bg-muted)] sm:py-0"
 				>
 					{m.home_cta_client()}
 				</a>
-				<div
-					class="inline-flex items-center justify-center px-5 py-3 text-sm font-semibold text-[var(--text-soft)] sm:py-0"
-				>
-					{m.home_cta_companies()}
-				</div>
 			</div>
 			<p class="mt-4 text-base text-[var(--text-soft)] sm:text-lg">{m.home_hero_caption()}</p>
 		</div>
@@ -139,12 +138,6 @@
 					<p class="mt-3 min-h-24 text-base leading-relaxed text-[var(--text-soft)] sm:text-lg">
 						{item.description()}
 					</p>
-					<a
-						href={resolve(routeHref(ROUTES.registerClient))}
-						class="mt-6 inline-flex rounded-xl bg-[var(--brand)] px-6 py-3 text-base font-semibold text-white transition hover:bg-[var(--brand-strong)] sm:text-lg"
-					>
-						{item.cta()}
-					</a>
 				</article>
 			{/each}
 		</div>
@@ -196,12 +189,20 @@
 			{m.home_final_heading()}
 		</h2>
 		<p class="mt-4 max-w-3xl text-base text-[var(--text-soft)] sm:text-xl">{m.home_final_body()}</p>
-		<a
-			href={resolve(routeHref(ROUTES.registerClient))}
-			class="mt-7 inline-flex rounded-xl bg-[var(--brand)] px-7 py-3 text-base font-semibold text-white transition hover:bg-[var(--brand-strong)] sm:text-lg"
-		>
-			{m.home_final_cta()}
-		</a>
+		<div class="mt-7 flex flex-wrap gap-3">
+			<a
+				href={resolve(routeHref(ROUTES.auth))}
+				class="inline-flex rounded-xl bg-[var(--brand)] px-7 py-3 text-base font-semibold text-white transition hover:bg-[var(--brand-strong)] sm:text-lg"
+			>
+				{m.home_cta_companies()}
+			</a>
+			<a
+				href={resolve(routeHref(ROUTES.registerClient))}
+				class="inline-flex rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-7 py-3 text-base font-semibold transition hover:bg-[var(--bg-muted)] sm:text-lg"
+			>
+				{m.home_final_cta()}
+			</a>
+		</div>
 	</section>
 </main>
 

@@ -21,6 +21,7 @@
 		cleanerStartTask,
 		feedbackCreate,
 		feedbackDelete,
+		feedbackGetObjects,
 		feedbackGetMy,
 		feedbackUpdate,
 		inspectionsCreate,
@@ -28,6 +29,7 @@
 		type AdminEfficiencyRow,
 		type CleanerTaskFilters,
 		type CleanerTaskRow,
+		type ClientFeedbackObject,
 		type ClientFeedbackRow,
 		type Company,
 		type ObjectStatusRow,
@@ -91,6 +93,7 @@
 		text: ''
 	});
 
+	let clientFeedbackObjects = $state<ClientFeedbackObject[]>([]);
 	let clientFeedbackRows = $state<ClientFeedbackRow[]>([]);
 	const feedbackDrafts: Record<number, { rating: string; text: string }> = $state({});
 
@@ -156,6 +159,9 @@
 		objectsStatus = objectsPayload;
 		efficiency = efficiencyPayload;
 		inspectionsPending = pendingPayload;
+		if (!inspectionForm.taskId && pendingPayload.length) {
+			inspectionForm.taskId = String(pendingPayload[0].task.id);
+		}
 	}
 
 	async function loadCleanerData() {
@@ -166,11 +172,28 @@
 	async function loadSupervisorData() {
 		const token = tokenOrThrow();
 		inspectionsPending = await inspectionsGetPending(token);
+		if (!inspectionForm.taskId && inspectionsPending.length) {
+			inspectionForm.taskId = String(inspectionsPending[0].task.id);
+		}
 	}
 
 	async function loadClientData() {
 		const token = tokenOrThrow();
-		clientFeedbackRows = await feedbackGetMy(token);
+		const [feedbackRows, feedbackObjects] = await Promise.all([
+			feedbackGetMy(token),
+			feedbackGetObjects(token)
+		]);
+		clientFeedbackRows = feedbackRows;
+		clientFeedbackObjects = feedbackObjects;
+		if (
+			feedbackForm.objectId &&
+			!feedbackObjects.some((item) => String(item.id) === feedbackForm.objectId)
+		) {
+			feedbackForm.objectId = '';
+		}
+		if (!feedbackForm.objectId && feedbackObjects.length) {
+			feedbackForm.objectId = String(feedbackObjects[0].id);
+		}
 		for (const key in feedbackDrafts) {
 			delete feedbackDrafts[Number(key)];
 		}
@@ -461,7 +484,7 @@
 
 		{#if currentSession.user.role === 'admin'}
 			<div class="mt-6 grid gap-6">
-				<section class={ui.panel}>
+				<section id="admin-company" class={ui.panel}>
 					<h2 class="text-2xl font-bold">{m.app_admin_company_title()}</h2>
 					<div class="mt-4 flex flex-wrap gap-2">
 						<button
@@ -494,7 +517,7 @@
 					</form>
 				</section>
 
-				<section class={ui.panel}>
+				<section id="admin-users" class={ui.panel}>
 					<h2 class="text-2xl font-bold">{m.app_admin_users_title()}</h2>
 					<form class="mt-4 grid gap-3 md:grid-cols-2" onsubmit={onCreateUser}>
 						<label class={ui.label}>
@@ -526,7 +549,7 @@
 					</form>
 				</section>
 
-				<section class={ui.panel}>
+				<section id="admin-objects" class={ui.panel}>
 					<h2 class="text-2xl font-bold">{m.app_admin_objects_title()}</h2>
 					<form class="mt-4 grid gap-3 md:grid-cols-2" onsubmit={onCreateObject}>
 						<label class={`${ui.label} md:col-span-2`}>
@@ -588,7 +611,7 @@
 					</div>
 				</section>
 
-				<section class={ui.panel}>
+				<section id="admin-rooms" class={ui.panel}>
 					<h2 class="text-2xl font-bold">{m.app_admin_rooms_title()}</h2>
 					<form class="mt-4 grid gap-3 md:grid-cols-3" onsubmit={onCreateRoom}>
 						<label class={ui.label}>
@@ -627,7 +650,7 @@
 					</form>
 				</section>
 
-				<section class={ui.panel}>
+				<section id="admin-tasks" class={ui.panel}>
 					<h2 class="text-2xl font-bold">{m.app_admin_tasks_title()}</h2>
 					<form class="mt-4 grid gap-3 md:grid-cols-2" onsubmit={onCreateTask}>
 						<label class={ui.label}>
@@ -652,7 +675,7 @@
 					</form>
 				</section>
 
-				<section class={ui.panel}>
+				<section id="admin-analytics" class={ui.panel}>
 					<h2 class="text-2xl font-bold">{m.app_admin_analytics_title()}</h2>
 					<div class="mt-3">
 						<button
@@ -695,7 +718,7 @@
 		{/if}
 
 		{#if currentSession.user.role === 'cleaner'}
-			<section class={`mt-6 ${ui.panel}`}>
+			<section id="cleaner-tasks" class={`mt-6 ${ui.panel}`}>
 				<h2 class="text-2xl font-bold">{m.app_cleaner_title()}</h2>
 				<form
 					class="mt-3 grid gap-3 md:grid-cols-4"
@@ -802,7 +825,7 @@
 		{/if}
 
 		{#if currentSession.user.role === 'supervisor' || currentSession.user.role === 'admin'}
-			<section class={`mt-6 ${ui.panel}`}>
+			<section id="supervisor-inspections" class={`mt-6 ${ui.panel}`}>
 				<h2 class="text-2xl font-bold">{m.app_inspections_title()}</h2>
 				<div class="mt-3">
 					<button
@@ -818,13 +841,14 @@
 				<form class="mt-4 grid gap-3 md:grid-cols-3" onsubmit={onCreateInspection}>
 					<label class={ui.label}>
 						<span>{m.app_inspection_task_id_label()}</span>
-						<input
-							required
-							type="number"
-							min="1"
-							bind:value={inspectionForm.taskId}
-							class={ui.input}
-						/>
+						<select required bind:value={inspectionForm.taskId} class={ui.input}>
+							<option value="" disabled>{m.app_inspection_task_id_label()}</option>
+							{#each inspectionsPending as pendingRow (pendingRow.task.id)}
+								<option value={String(pendingRow.task.id)}>
+									#{pendingRow.task.id} · {pendingRow.object.address}
+								</option>
+							{/each}
+						</select>
 					</label>
 					<label class={ui.label}>
 						<span>{m.app_inspection_score_label()}</span>
@@ -884,7 +908,7 @@
 		{/if}
 
 		{#if currentSession.user.role === 'client'}
-			<section class={`mt-6 ${ui.panel}`}>
+			<section id="client-feedback" class={`mt-6 ${ui.panel}`}>
 				<h2 class="text-2xl font-bold">{m.app_client_title()}</h2>
 				<p class="mt-2 text-[var(--text-soft)]">{m.app_client_body()}</p>
 				<div class="mt-3">
@@ -901,13 +925,14 @@
 				<form class="mt-4 grid gap-3 md:grid-cols-3" onsubmit={onCreateClientFeedback}>
 					<label class={ui.label}>
 						<span>{m.app_client_feedback_object_id_label()}</span>
-						<input
-							required
-							type="number"
-							min="1"
-							bind:value={feedbackForm.objectId}
-							class={ui.input}
-						/>
+						<select required bind:value={feedbackForm.objectId} class={ui.input}>
+							<option value="" disabled>{m.app_client_feedback_object_id_label()}</option>
+							{#each clientFeedbackObjects as objectRow (objectRow.id)}
+								<option value={String(objectRow.id)}>
+									#{objectRow.id} · {objectRow.address}
+								</option>
+							{/each}
+						</select>
 					</label>
 					<label class={ui.label}>
 						<span>{m.app_client_feedback_rating_label()}</span>
@@ -925,11 +950,18 @@
 						<input type="text" bind:value={feedbackForm.text} class={ui.input} />
 					</label>
 					<div class="md:col-span-3">
-						<button type="submit" disabled={loading} class={ui.primaryButton}>
+						<button
+							type="submit"
+							disabled={loading || clientFeedbackObjects.length === 0}
+							class={ui.primaryButton}
+						>
 							{m.app_client_feedback_create()}
 						</button>
 					</div>
 				</form>
+				{#if clientFeedbackObjects.length === 0}
+					<p class="mt-3 text-sm text-[var(--text-soft)]">{m.app_empty_objects()}</p>
+				{/if}
 
 				<div class="mt-4 overflow-x-auto">
 					<table class="min-w-full text-sm">
