@@ -4,6 +4,7 @@ import {companies, objects, rooms, tasks, users} from "../database/schema";
 import {and, eq, sql} from "drizzle-orm";
 import {jwt} from "@elysiajs/jwt";
 import {config} from "../utils/config";
+import type {JwtPayload} from "../utils/types";
 
 export const adminRoutes = new Elysia({ prefix: "/admin" })
   .use(
@@ -24,17 +25,19 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
         set.status = 401;
         throw new Error("Unauthorized");
     }
-    // @ts-ignore
-    if (profile.role !== "admin") {
+      const user: JwtPayload = {
+          id: Number(profile.id),
+          role: profile.role as JwtPayload["role"],
+          company_id: Number(profile.company_id),
+      };
+      if (user.role !== "admin") {
         set.status = 403;
         throw new Error("Forbidden");
     }
-    return { user: profile };
+      return {user};
   })
   .get("/analytics/efficiency", async ({ user }) => {
-    // Stats: sqm cleaned by each employee.
-    // Sum area_sqm of rooms where task.status = 'completed' grouped by cleaner.
-    
+      // stats: sqm cleaned by each employee
     const result = await db.select({
         cleanerName: users.name,
         totalArea: sql<number>`sum(${rooms.area_sqm})`.mapWith(Number)
@@ -44,7 +47,6 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
     .innerJoin(rooms, eq(tasks.room_id, rooms.id))
     .where(and(
         eq(tasks.status, "completed"),
-        // @ts-ignore
         eq(users.company_id, user.company_id)
     ))
     .groupBy(users.name);
@@ -52,28 +54,54 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
     return result;
   })
   .get("/objects/status", async ({ user }) => {
-    // Monitoring of all objects.
-    // Return all objects with some status summary?
-    // Let's return objects and maybe count of pending/completed tasks.
-    
-    // Simple fetch of all objects for now as "status" wasn't strictly defined by user other than "monitoring".
-    // I'll add a simple count of tasks if possible, or just list objects.
-    // Let's list objects with a dummy status or aggregated task info if feasible.
-    // For MVP, just returning objects.
-    
-    const allObjects = await db.select().from(objects)
-        // @ts-ignore
-        .where(eq(objects.company_id, user.company_id));
-    return allObjects; 
+      // aggregated status per object: total/pending/in_progress/completed task counts
+      const result = await db.select({
+          objectId: objects.id,
+          address: objects.address,
+          description: objects.description,
+          totalTasks: sql<number>`count(
+          ${tasks.id}
+          )`.mapWith(Number),
+          pendingTasks: sql<number>`count(case when
+          ${tasks.status}
+          =
+          'pending'
+          then
+          1
+          end
+          )`.mapWith(Number),
+          inProgressTasks: sql<number>`count(case when
+          ${tasks.status}
+          =
+          'in_progress'
+          then
+          1
+          end
+          )`.mapWith(Number),
+          completedTasks: sql<number>`count(case when
+          ${tasks.status}
+          =
+          'completed'
+          then
+          1
+          end
+          )`.mapWith(Number),
+      })
+          .from(objects)
+          .leftJoin(rooms, eq(rooms.object_id, objects.id))
+          .leftJoin(tasks, eq(tasks.room_id, rooms.id))
+          .where(eq(objects.company_id, user.company_id))
+          .groupBy(objects.id, objects.address, objects.description);
+
+      return result;
   })
   .post("/users", async ({ body, user, set }) => {
       const hashedPassword = await Bun.password.hash(body.password);
     const newUser = await db.insert(users).values({
-        // @ts-ignore
         company_id: user.company_id,
         name: body.name,
         email: body.email,
-        role: body.role,
+        role: body.role as "admin" | "supervisor" | "cleaner" | "client",
         password: hashedPassword
     }).returning();
 
@@ -82,14 +110,12 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
     body: t.Object({
         name: t.String(),
         email: t.String(),
-        role: t.String(), // Should be enum validation ideally
+        role: t.String(),
         password: t.String()
     })
   })
   .post("/objects", async ({ body, user }) => {
-    // Create Object
     const newObject = await db.insert(objects).values({
-        // @ts-ignore
         company_id: user.company_id,
         address: body.address,
         description: body.description
@@ -105,7 +131,7 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
     .post("/rooms", async ({body, user, set}) => {
         // verify object belongs to this company
         const obj = await db.select().from(objects).where(
-            and(eq(objects.id, body.object_id), eq(objects.company_id, user.company_id as number))
+            and(eq(objects.id, body.object_id), eq(objects.company_id, user.company_id))
         );
         if (!obj.length) {
             set.status = 403;
@@ -122,7 +148,7 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
   }, {
     body: t.Object({
         object_id: t.Integer(),
-        type: t.String(), // Enum validation can be added
+        type: t.String(),
         area_sqm: t.Integer()
     })
   })
@@ -130,7 +156,7 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
         // verify room belongs to this company (room -> object -> company)
         const room = await db.select().from(rooms)
             .innerJoin(objects, eq(rooms.object_id, objects.id))
-            .where(and(eq(rooms.id, body.room_id), eq(objects.company_id, user.company_id as number)));
+            .where(and(eq(rooms.id, body.room_id), eq(objects.company_id, user.company_id)));
         if (!room.length) {
             set.status = 403;
             return {message: "Room does not belong to your company"};
@@ -138,7 +164,7 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
 
         // verify cleaner belongs to this company
         const cleaner = await db.select().from(users)
-            .where(and(eq(users.id, body.cleaner_id), eq(users.company_id, user.company_id as number)));
+            .where(and(eq(users.id, body.cleaner_id), eq(users.company_id, user.company_id)));
         if (!cleaner.length) {
             set.status = 403;
             return {message: "Cleaner does not belong to your company"};
@@ -158,18 +184,16 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
     })
   })
   .get("/company", async ({ user }) => {
-    // Get Company Data
-    const company = await db.select().from(companies).where(eq(companies.id, user.company_id as number));
+      const company = await db.select().from(companies).where(eq(companies.id, user.company_id));
     if (!company.length) {
         throw new Error("Company not found");
     }
     return company[0];
   })
   .patch("/company", async ({ body, user }) => {
-    // Update Company Data
     const updated = await db.update(companies)
         .set({ name: body.name })
-        .where(eq(companies.id, user.company_id as number))
+        .where(eq(companies.id, user.company_id))
         .returning();
     
     return updated[0];
@@ -179,9 +203,8 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
     })
   })
   .delete("/company", async ({ user }) => {
-    // Delete Company (Cascading)
     const deleted = await db.delete(companies)
-        .where(eq(companies.id, user.company_id as number))
+        .where(eq(companies.id, user.company_id))
         .returning();
     
     return { message: "Company deleted successfully", deletedCompany: deleted[0] };

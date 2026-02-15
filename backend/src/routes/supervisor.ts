@@ -4,6 +4,7 @@ import {checklists, objects, rooms, tasks} from "../database/schema";
 import {and, eq, isNull} from "drizzle-orm";
 import {jwt} from "@elysiajs/jwt";
 import {config} from "../utils/config";
+import type {JwtPayload} from "../utils/types";
 
 export const supervisorRoutes = new Elysia({ prefix: "/inspections" })
   .use(
@@ -24,25 +25,19 @@ export const supervisorRoutes = new Elysia({ prefix: "/inspections" })
         set.status = 401;
         throw new Error("Unauthorized");
     }
-    // Check if role is supervisor or admin
-    // @ts-ignore
-    if (profile.role !== "supervisor" && profile.role !== "admin") {
+      const user: JwtPayload = {
+          id: Number(profile.id),
+          role: profile.role as JwtPayload["role"],
+          company_id: Number(profile.company_id),
+      };
+      if (user.role !== "supervisor" && user.role !== "admin") {
         set.status = 403;
         throw new Error("Forbidden");
     }
-    return { user: profile };
+      return {user};
   })
   .get("/pending", async ({ user }) => {
-    // Tasks that are completed but not yet inspected?
-    // or tasks that are completed and don't have a checklist?
-    // User request: "GET /inspections/pending — Список завершенных работ, требующих проверки."
-    
-    // In SQL: select tasks where status = 'completed' and not exists (select 1 from checklists where task_id = tasks.id)
-    // Drizzle doesn't support NOT EXISTS easily in query builder, let's just fetch completed tasks and maybe checklists, or use left join.
-    
-    // For simplicity: fetch all completed tasks and filter in js if needed, or assumming we just show all completed tasks to be potentially re-inspected.
-    // Better: Left join checklists, filter where checklist.id is null.
-    
+      // completed tasks that have not been inspected yet (no checklist row)
     const pendingInspections = await db.select({
         task: tasks,
         room: rooms,
@@ -54,7 +49,6 @@ export const supervisorRoutes = new Elysia({ prefix: "/inspections" })
     .leftJoin(checklists, eq(tasks.id, checklists.task_id))
     .where(and(
         eq(tasks.status, "completed"),
-        // @ts-ignore
         eq(objects.company_id, user.company_id),
         isNull(checklists.id)
     ));
@@ -72,7 +66,6 @@ export const supervisorRoutes = new Elysia({ prefix: "/inspections" })
           .where(and(
               eq(tasks.id, taskId),
               eq(tasks.status, "completed"),
-              // @ts-ignore
               eq(objects.company_id, user.company_id)
           ));
       if (!task.length) {
@@ -84,7 +77,7 @@ export const supervisorRoutes = new Elysia({ prefix: "/inspections" })
       try {
           const newChecklist = await db.insert(checklists).values({
               task_id: taskId,
-              inspector_id: user.id as number,
+              inspector_id: user.id,
               score: body.score,
               comment: body.comment
           }).returning();

@@ -39,11 +39,10 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
             return {company, user};
         });
 
-      // 3. Generate Token
       const token = await jwt.sign({
-        id: user[0].id,
+          id: String(user[0].id),
         role: user[0].role,
-        company_id: user[0].company_id
+          company_id: String(user[0].company_id)
       });
 
       return {
@@ -71,14 +70,6 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     async ({ body, jwt, set }) => {
       const user = await db.query.users.findFirst({
         where: eq(users.email, body.email),
-        with: {
-            // @ts-ignore - relation will be inferred if we define it, 
-            // but for now we can just fetch company separately or use db.select().from(users).innerJoin(companies...)
-            // Let's keep it simple and just do a second query or join if needed.
-            // Drizzle query builder with relations requires relations definition in schema.
-            // I haven't added relations to schema.ts export.
-            // So I will just fetch company manually or use a join.
-        }
       });
 
         if (!user || !(await Bun.password.verify(body.password, user.password))) {
@@ -89,10 +80,9 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       const company = await db.select().from(companies).where(eq(companies.id, user.company_id));
 
       const token = await jwt.sign({
-        id: user.id,
+          id: String(user.id),
         role: user.role,
-        // @ts-ignore
-        company_id: user.company_id
+          company_id: String(user.company_id)
       });
 
       return {
@@ -101,7 +91,6 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
             id: user.id,
             name: user.name,
             role: user.role,
-            // @ts-ignore
             company_id: user.company_id
         },
         company: company[0]

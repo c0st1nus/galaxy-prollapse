@@ -1,0 +1,118 @@
+import {Elysia, t} from "elysia";
+import {db} from "../database";
+import {feedback, objects} from "../database/schema";
+import {and, eq} from "drizzle-orm";
+import {jwt} from "@elysiajs/jwt";
+import {config} from "../utils/config";
+import type {JwtPayload} from "../utils/types";
+
+export const feedbackRoutes = new Elysia({prefix: "/feedback"})
+    .use(
+        jwt({
+            name: "jwt",
+            secret: config.JWT_SECRET,
+        })
+    )
+    .derive(async ({headers, jwt, set}) => {
+        const auth = headers["authorization"];
+        if (!auth) {
+            set.status = 401;
+            throw new Error("Unauthorized");
+        }
+        const token = auth.startsWith("Bearer ") ? auth.slice(7) : auth;
+        const profile = await jwt.verify(token);
+        if (!profile) {
+            set.status = 401;
+            throw new Error("Unauthorized");
+        }
+        const user: JwtPayload = {
+            id: Number(profile.id),
+            role: profile.role as JwtPayload["role"],
+            company_id: Number(profile.company_id),
+        };
+        if (user.role !== "client") {
+            set.status = 403;
+            throw new Error("Forbidden: only clients can manage feedback");
+        }
+        return {user};
+    })
+    // list feedback left by this client
+    .get("/my", async ({user}) => {
+        const result = await db.select({
+            feedback: feedback,
+            object: objects,
+        })
+            .from(feedback)
+            .innerJoin(objects, eq(feedback.object_id, objects.id))
+            .where(and(
+                eq(feedback.client_id, user.id),
+                eq(objects.company_id, user.company_id)
+            ));
+
+        return result;
+    })
+    // create new feedback for an object
+    .post("/", async ({body, user, set}) => {
+        // verify object belongs to same company
+        const obj = await db.select().from(objects).where(
+            and(eq(objects.id, body.object_id), eq(objects.company_id, user.company_id))
+        );
+        if (!obj.length) {
+            set.status = 403;
+            return {message: "Object does not belong to your company"};
+        }
+
+        const newFeedback = await db.insert(feedback).values({
+            object_id: body.object_id,
+            client_id: user.id,
+            rating: body.rating,
+            text: body.text,
+        }).returning();
+
+        return newFeedback[0];
+    }, {
+        body: t.Object({
+            object_id: t.Integer(),
+            rating: t.Integer({minimum: 1, maximum: 5}),
+            text: t.Optional(t.String()),
+        })
+    })
+    // update own feedback
+    .patch("/:id", async ({params, body, user, set}) => {
+        const feedbackId = parseInt(params.id);
+
+        const updated = await db.update(feedback)
+            .set({
+                rating: body.rating,
+                text: body.text,
+            })
+            .where(and(eq(feedback.id, feedbackId), eq(feedback.client_id, user.id)))
+            .returning();
+
+        if (!updated.length) {
+            set.status = 404;
+            return {message: "Feedback not found or not yours"};
+        }
+
+        return updated[0];
+    }, {
+        body: t.Object({
+            rating: t.Optional(t.Integer({minimum: 1, maximum: 5})),
+            text: t.Optional(t.String()),
+        })
+    })
+    // delete own feedback
+    .delete("/:id", async ({params, user, set}) => {
+        const feedbackId = parseInt(params.id);
+
+        const deleted = await db.delete(feedback)
+            .where(and(eq(feedback.id, feedbackId), eq(feedback.client_id, user.id)))
+            .returning();
+
+        if (!deleted.length) {
+            set.status = 404;
+            return {message: "Feedback not found or not yours"};
+        }
+
+        return {message: "Feedback deleted successfully"};
+    });
