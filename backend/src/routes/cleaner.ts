@@ -45,6 +45,8 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
     .innerJoin(objects, eq(rooms.object_id, objects.id))
     .where(and(
         eq(tasks.cleaner_id, user.id as number),
+        // @ts-ignore
+        eq(objects.company_id, user.company_id)
         // eq(tasks.status, "pending") // or in_progress, showing all for now
     ));
     
