@@ -6,7 +6,11 @@
     "dev": "bun run --watch src/index.ts"
   },
   "dependencies": {
-    "elysia": "latest"
+    "@elysiajs/cors": "^1.4.1",
+    "@elysiajs/jwt": "^1.4.0",
+    "drizzle-orm": "^0.45.1",
+    "elysia": "latest",
+    "postgres": "^3.4.8"
   },
   "devDependencies": {
     "bun-types": "latest"

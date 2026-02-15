@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: td-postgres
+    environment:
+      POSTGRES_DB: cleaning_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.internal_data/postgres/data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: td-backend
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+
+  minio:
+    image: minio/minio
+    container_name: td-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./.internal_data/minio/data:/data
