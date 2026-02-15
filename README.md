@@ -38,8 +38,8 @@ Start both the backend and frontend development servers concurrently:
 bun run dev
 ```
 
-- **Frontend**: http://localhost:5173 (default Vite port)
-- **Backend API**: http://localhost:3000 (default Elysia port)
+- **Frontend**: `http://localhost:5173` (default Vite port)
+- **Backend API**: `http://localhost:3000` (default Elysia port)
 
 ## Scripts
 
