@@ -11,14 +11,6 @@ services:
     volumes:
       - ./.internal_data/postgres/data:/var/lib/postgresql/data
 
-  backend:
-    build: ./backend
-    container_name: td-backend
-    depends_on:
-      - db
-    ports:
-      - "3000:3000"
-
   minio:
     image: minio/minio
     container_name: td-minio

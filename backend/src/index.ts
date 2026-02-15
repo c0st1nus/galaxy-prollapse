@@ -1,7 +1,23 @@
 import { Elysia } from "elysia";
+import { cors } from "@elysiajs/cors";
+import { authRoutes } from "./routes/auth";
+import { cleanerRoutes } from "./routes/cleaner";
+import { supervisorRoutes } from "./routes/supervisor";
+import { adminRoutes } from "./routes/admin";
+import { config } from "./utils/config";
+import { runMigrations } from "./database/migrate";
 
-const app = new Elysia().get("/", () => "Hello Elysia").listen(3000);
+await runMigrations();
+
+const app = new Elysia()
+  .use(cors())
+  .get("/", () => "School Hackathon Backend API")
+  .use(authRoutes)
+  .use(cleanerRoutes)
+  .use(supervisorRoutes)
+  .use(adminRoutes)
+  .listen(config.PORT);
 
 console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+  `🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port}`
 );
