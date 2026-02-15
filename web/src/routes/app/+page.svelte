@@ -19,10 +19,16 @@
 		cleanerCompleteTask,
 		cleanerGetTasks,
 		cleanerStartTask,
+		feedbackCreate,
+		feedbackDelete,
+		feedbackGetMy,
+		feedbackUpdate,
 		inspectionsCreate,
 		inspectionsGetPending,
 		type AdminEfficiencyRow,
+		type CleanerTaskFilters,
 		type CleanerTaskRow,
+		type ClientFeedbackRow,
 		type Company,
 		type ObjectStatusRow,
 		type PendingInspectionRow,
@@ -73,6 +79,21 @@
 		comment: ''
 	});
 
+	let cleanerFilters = $state({
+		status: '',
+		date_from: '',
+		date_to: ''
+	});
+
+	let feedbackForm = $state({
+		objectId: '',
+		rating: '5',
+		text: ''
+	});
+
+	let clientFeedbackRows = $state<ClientFeedbackRow[]>([]);
+	const feedbackDrafts: Record<number, { rating: string; text: string }> = $state({});
+
 	const beforeFiles: Record<number, File | null> = $state({});
 	const afterFiles: Record<number, File | null> = $state({});
 
@@ -97,6 +118,16 @@
 		if (role === 'supervisor') return m.role_supervisor();
 		if (role === 'cleaner') return m.role_cleaner();
 		return m.role_client();
+	}
+
+	function activeCleanerFilters(): CleanerTaskFilters {
+		return {
+			status: cleanerFilters.status
+				? (cleanerFilters.status as CleanerTaskFilters['status'])
+				: undefined,
+			date_from: cleanerFilters.date_from || undefined,
+			date_to: cleanerFilters.date_to || undefined
+		};
 	}
 
 	// keep async actions consistent for loader + status messages.
@@ -129,12 +160,26 @@
 
 	async function loadCleanerData() {
 		const token = tokenOrThrow();
-		cleanerTasks = await cleanerGetTasks(token);
+		cleanerTasks = await cleanerGetTasks(token, activeCleanerFilters());
 	}
 
 	async function loadSupervisorData() {
 		const token = tokenOrThrow();
 		inspectionsPending = await inspectionsGetPending(token);
+	}
+
+	async function loadClientData() {
+		const token = tokenOrThrow();
+		clientFeedbackRows = await feedbackGetMy(token);
+		for (const key in feedbackDrafts) {
+			delete feedbackDrafts[Number(key)];
+		}
+		for (const row of clientFeedbackRows) {
+			feedbackDrafts[row.feedback.id] = {
+				rating: String(row.feedback.rating),
+				text: row.feedback.text || ''
+			};
+		}
 	}
 
 	async function refreshByRole() {
@@ -149,6 +194,10 @@
 		}
 		if (currentSession.user.role === 'supervisor') {
 			await loadSupervisorData();
+			return;
+		}
+		if (currentSession.user.role === 'client') {
+			await loadClientData();
 		}
 	}
 
@@ -251,7 +300,7 @@
 
 	async function onLoadCleanerTasks() {
 		await withAction(async () => {
-			cleanerTasks = await cleanerGetTasks(tokenOrThrow());
+			cleanerTasks = await cleanerGetTasks(tokenOrThrow(), activeCleanerFilters());
 			success = m.app_success_cleaner_tasks_loaded();
 		});
 	}
@@ -259,7 +308,7 @@
 	async function onStartCleanerTask(taskId: number) {
 		await withAction(async () => {
 			await cleanerStartTask(tokenOrThrow(), taskId, beforeFiles[taskId]);
-			cleanerTasks = await cleanerGetTasks(tokenOrThrow());
+			cleanerTasks = await cleanerGetTasks(tokenOrThrow(), activeCleanerFilters());
 			success = m.app_success_task_started();
 		});
 	}
@@ -267,7 +316,7 @@
 	async function onCompleteCleanerTask(taskId: number) {
 		await withAction(async () => {
 			await cleanerCompleteTask(tokenOrThrow(), taskId, afterFiles[taskId]);
-			cleanerTasks = await cleanerGetTasks(tokenOrThrow());
+			cleanerTasks = await cleanerGetTasks(tokenOrThrow(), activeCleanerFilters());
 			success = m.app_success_task_completed();
 		});
 	}
@@ -290,6 +339,47 @@
 			inspectionForm = { taskId: '', score: '5', comment: '' };
 			inspectionsPending = await inspectionsGetPending(tokenOrThrow());
 			success = m.app_success_inspection_created();
+		});
+	}
+
+	async function onLoadClientFeedback() {
+		await withAction(async () => {
+			await loadClientData();
+			success = m.app_success_client_feedback_loaded();
+		});
+	}
+
+	async function onCreateClientFeedback(event: SubmitEvent) {
+		event.preventDefault();
+		await withAction(async () => {
+			await feedbackCreate(tokenOrThrow(), {
+				object_id: Number(feedbackForm.objectId),
+				rating: Number(feedbackForm.rating),
+				text: feedbackForm.text.trim() || undefined
+			});
+			feedbackForm = { objectId: '', rating: '5', text: '' };
+			await loadClientData();
+			success = m.app_success_client_feedback_created();
+		});
+	}
+
+	async function onUpdateClientFeedback(feedbackId: number) {
+		await withAction(async () => {
+			const draft = feedbackDrafts[feedbackId];
+			await feedbackUpdate(tokenOrThrow(), feedbackId, {
+				rating: Number(draft.rating),
+				text: draft.text.trim() || undefined
+			});
+			await loadClientData();
+			success = m.app_success_client_feedback_updated();
+		});
+	}
+
+	async function onDeleteClientFeedback(feedbackId: number) {
+		await withAction(async () => {
+			await feedbackDelete(tokenOrThrow(), feedbackId);
+			await loadClientData();
+			success = m.app_success_client_feedback_deleted();
 		});
 	}
 
@@ -465,23 +555,31 @@
 						<table class="min-w-full text-sm">
 							<thead class="text-left text-[var(--text-soft)]">
 								<tr>
-									<th class="py-2 pr-4">ID</th>
+									<th class="py-2 pr-4">{m.app_admin_object_id_label()}</th>
 									<th class="py-2 pr-4">{m.app_admin_object_address_label()}</th>
 									<th class="py-2 pr-4">{m.app_admin_object_description_label()}</th>
+									<th class="py-2 pr-4">{m.app_admin_objects_total_tasks()}</th>
+									<th class="py-2 pr-4">{m.app_admin_objects_pending_tasks()}</th>
+									<th class="py-2 pr-4">{m.app_admin_objects_in_progress_tasks()}</th>
+									<th class="py-2 pr-4">{m.app_admin_objects_completed_tasks()}</th>
 								</tr>
 							</thead>
 							<tbody>
 								{#if objectsStatus.length === 0}
 									<tr>
-										<td colspan="3" class="py-3 text-[var(--text-soft)]">{m.app_empty_objects()}</td
+										<td colspan="7" class="py-3 text-[var(--text-soft)]">{m.app_empty_objects()}</td
 										>
 									</tr>
 								{:else}
-									{#each objectsStatus as item (item.id)}
+									{#each objectsStatus as item (item.objectId)}
 										<tr class="border-t border-[var(--border)]">
-											<td class="py-2 pr-4">{item.id}</td>
+											<td class="py-2 pr-4">{item.objectId}</td>
 											<td class="py-2 pr-4">{item.address}</td>
 											<td class="py-2 pr-4">{item.description || '—'}</td>
+											<td class="py-2 pr-4">{item.totalTasks}</td>
+											<td class="py-2 pr-4">{item.pendingTasks}</td>
+											<td class="py-2 pr-4">{item.inProgressTasks}</td>
+											<td class="py-2 pr-4">{item.completedTasks}</td>
 										</tr>
 									{/each}
 								{/if}
@@ -599,16 +697,36 @@
 		{#if currentSession.user.role === 'cleaner'}
 			<section class={`mt-6 ${ui.panel}`}>
 				<h2 class="text-2xl font-bold">{m.app_cleaner_title()}</h2>
-				<div class="mt-3">
-					<button
-						type="button"
-						disabled={loading}
-						onclick={onLoadCleanerTasks}
-						class={ui.secondaryButton}
-					>
-						{m.app_cleaner_fetch()}
-					</button>
-				</div>
+				<form
+					class="mt-3 grid gap-3 md:grid-cols-4"
+					onsubmit={(event) => {
+						event.preventDefault();
+						void onLoadCleanerTasks();
+					}}
+				>
+					<label class={ui.label}>
+						<span>{m.app_cleaner_filter_status_label()}</span>
+						<select bind:value={cleanerFilters.status} class={ui.input}>
+							<option value="">{m.app_cleaner_filter_any_status()}</option>
+							<option value="pending">pending</option>
+							<option value="in_progress">in_progress</option>
+							<option value="completed">completed</option>
+						</select>
+					</label>
+					<label class={ui.label}>
+						<span>{m.app_cleaner_filter_date_from_label()}</span>
+						<input type="date" bind:value={cleanerFilters.date_from} class={ui.input} />
+					</label>
+					<label class={ui.label}>
+						<span>{m.app_cleaner_filter_date_to_label()}</span>
+						<input type="date" bind:value={cleanerFilters.date_to} class={ui.input} />
+					</label>
+					<div class="flex items-end">
+						<button type="submit" disabled={loading} class={ui.secondaryButton}>
+							{m.app_cleaner_fetch()}
+						</button>
+					</div>
+				</form>
 
 				{#if cleanerTasks.length === 0}
 					<p class="mt-4 text-[var(--text-soft)]">{m.app_empty_cleaner_tasks()}</p>
@@ -769,6 +887,115 @@
 			<section class={`mt-6 ${ui.panel}`}>
 				<h2 class="text-2xl font-bold">{m.app_client_title()}</h2>
 				<p class="mt-2 text-[var(--text-soft)]">{m.app_client_body()}</p>
+				<div class="mt-3">
+					<button
+						type="button"
+						disabled={loading}
+						onclick={onLoadClientFeedback}
+						class={ui.secondaryButton}
+					>
+						{m.app_client_feedback_fetch()}
+					</button>
+				</div>
+
+				<form class="mt-4 grid gap-3 md:grid-cols-3" onsubmit={onCreateClientFeedback}>
+					<label class={ui.label}>
+						<span>{m.app_client_feedback_object_id_label()}</span>
+						<input
+							required
+							type="number"
+							min="1"
+							bind:value={feedbackForm.objectId}
+							class={ui.input}
+						/>
+					</label>
+					<label class={ui.label}>
+						<span>{m.app_client_feedback_rating_label()}</span>
+						<input
+							required
+							type="number"
+							min="1"
+							max="5"
+							bind:value={feedbackForm.rating}
+							class={ui.input}
+						/>
+					</label>
+					<label class={`${ui.label} md:col-span-3`}>
+						<span>{m.app_client_feedback_text_label()}</span>
+						<input type="text" bind:value={feedbackForm.text} class={ui.input} />
+					</label>
+					<div class="md:col-span-3">
+						<button type="submit" disabled={loading} class={ui.primaryButton}>
+							{m.app_client_feedback_create()}
+						</button>
+					</div>
+				</form>
+
+				<div class="mt-4 overflow-x-auto">
+					<table class="min-w-full text-sm">
+						<thead class="text-left text-[var(--text-soft)]">
+							<tr>
+								<th class="py-2 pr-4">ID</th>
+								<th class="py-2 pr-4">{m.app_client_feedback_object_label()}</th>
+								<th class="py-2 pr-4">{m.app_client_feedback_rating_label()}</th>
+								<th class="py-2 pr-4">{m.app_client_feedback_text_label()}</th>
+								<th class="py-2 pr-4">{m.app_client_feedback_actions_label()}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#if clientFeedbackRows.length === 0}
+								<tr>
+									<td colspan="5" class="py-3 text-[var(--text-soft)]">
+										{m.app_empty_client_feedback()}
+									</td>
+								</tr>
+							{:else}
+								{#each clientFeedbackRows as row (row.feedback.id)}
+									<tr class="border-t border-[var(--border)]">
+										<td class="py-2 pr-4">{row.feedback.id}</td>
+										<td class="py-2 pr-4">{row.object.address}</td>
+										<td class="w-28 py-2 pr-4">
+											<input
+												type="number"
+												min="1"
+												max="5"
+												bind:value={feedbackDrafts[row.feedback.id].rating}
+												class={ui.input}
+											/>
+										</td>
+										<td class="min-w-64 py-2 pr-4">
+											<input
+												type="text"
+												bind:value={feedbackDrafts[row.feedback.id].text}
+												class={ui.input}
+											/>
+										</td>
+										<td class="py-2 pr-4">
+											<div class="flex flex-wrap gap-2">
+												<button
+													type="button"
+													disabled={loading}
+													onclick={() => onUpdateClientFeedback(row.feedback.id)}
+													class={ui.secondaryButton}
+												>
+													{m.app_client_feedback_update()}
+												</button>
+												<button
+													type="button"
+													disabled={loading}
+													onclick={() => onDeleteClientFeedback(row.feedback.id)}
+													class="rounded-xl border border-red-300 bg-red-50 px-4 py-2 font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+												>
+													{m.app_client_feedback_delete()}
+												</button>
+											</div>
+										</td>
+									</tr>
+								{/each}
+							{/if}
+						</tbody>
+					</table>
+				</div>
 			</section>
 		{/if}
 	{/if}

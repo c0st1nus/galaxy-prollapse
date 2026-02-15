@@ -8,10 +8,11 @@
     "dev:front": "cd web && bun run dev && cd ..",
     "dev:front:quick": "cd web && bun run dev:quick && cd ..",
     "build": "bun run build:back && bun run build:front",
+    "prod": "bun run build && bun run start",
     "build:back": "cd backend && bun run build && cd ..",
     "build:front": "cd web && bun run build && cd ..",
     "start": "concurrently \"bun run start:back\" \"bun run start:front\"",
-    "start:back": "bun run backend/dist/index.ts",
+    "start:back": "bun run backend/dist/index.js",
     "start:front": "cd web && bun run preview && cd ..",
     "install:all": "bun install && concurrently \"cd backend && bun install\" \"cd web && bun install\""
   },
