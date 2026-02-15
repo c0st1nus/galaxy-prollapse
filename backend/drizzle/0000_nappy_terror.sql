@@ -17,9 +17,7 @@ CREATE TABLE "feedback" (
 CREATE TABLE "objects" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"address" text NOT NULL,
-	"description" text,
-	"qr_code_token" text NOT NULL,
-	CONSTRAINT "objects_qr_code_token_unique" UNIQUE("qr_code_token")
+	"description" text
 );
 --> statement-breakpoint
 CREATE TABLE "rooms" (
@@ -44,9 +42,9 @@ CREATE TABLE "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"role" text NOT NULL,
-	"phone" varchar(20) NOT NULL,
+	"email" text NOT NULL,
 	"password" text NOT NULL,
-	CONSTRAINT "users_phone_unique" UNIQUE("phone")
+	CONSTRAINT "users_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
 ALTER TABLE "checklists" ADD CONSTRAINT "checklists_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

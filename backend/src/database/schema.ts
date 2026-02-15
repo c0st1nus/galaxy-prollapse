@@ -5,16 +5,15 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   role: text("role", { enum: ["admin", "supervisor", "cleaner", "client"] }).notNull(),
-  phone: varchar("phone", { length: 20 }).notNull().unique(),
+  email: text("email").notNull().unique(),
   password: text("password").notNull(), // using text for hashed password
 });
 
-// Objects: id, address, description, qr_code_token (for presence check).
+// Objects: id, address, description
 export const objects = pgTable("objects", {
   id: serial("id").primaryKey(),
   address: text("address").notNull(),
   description: text("description"),
-  qr_code_token: text("qr_code_token").notNull().unique(),
 });
 
 // Rooms: id, object_id, type (office, bathroom, corridor), area_sqm.
