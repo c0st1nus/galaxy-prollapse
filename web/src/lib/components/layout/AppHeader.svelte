@@ -34,8 +34,6 @@
 			items.push({ path: ROUTES.auth, label: () => m.nav_auth(), icon: 'users' });
 		}
 
-		items.push({ path: ROUTES.registerClient, label: () => m.nav_register_client(), icon: 'user' });
-
 		if (showDevUi) {
 			items.push(
 				{ path: ROUTES.demo, label: () => m.nav_demo(), icon: 'sparkles' },
@@ -60,8 +58,6 @@
 		} else {
 			items.push({ path: ROUTES.auth, label: () => m.nav_auth(), icon: 'users' });
 		}
-
-		items.push({ path: ROUTES.registerClient, label: () => m.nav_register_client(), icon: 'user' });
 
 		if (showDevUi) {
 			items.push({ path: ROUTES.demo, label: () => m.nav_demo(), icon: 'sparkles' });
@@ -133,7 +129,7 @@
 <header
 	class="fixed inset-x-0 top-0 z-50 border-b border-[var(--border)] bg-[var(--bg-app)]/90 pt-[env(safe-area-inset-top)] backdrop-blur-md md:sticky md:pt-0"
 >
-	<div class="mx-auto max-w-6xl px-3 sm:px-4 md:px-6">
+	<div class="mx-auto max-w-6xl px-2.5 sm:px-4 md:px-6">
 		<div class="flex h-16 items-center justify-between gap-2 md:hidden">
 			<button
 				type="button"
@@ -248,7 +244,7 @@
 {/if}
 
 <aside
-	class={`fixed top-0 left-0 z-50 h-dvh w-[82%] max-w-sm border-r border-[var(--border)] bg-[var(--bg-elevated)] p-4 pt-[calc(env(safe-area-inset-top)+1rem)] shadow-[var(--shadow)] transition-transform md:hidden ${
+	class={`fixed top-0 left-0 z-50 h-dvh w-[84%] max-w-sm border-r border-[var(--border)] bg-[var(--bg-elevated)] p-3.5 pt-[calc(env(safe-area-inset-top)+0.85rem)] shadow-[var(--shadow)] transition-transform md:hidden ${
 		mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
 	}`}
 >
@@ -294,7 +290,7 @@
 
 	<div class="surface-soft mt-5 p-3">
 		<p class="mb-2 text-xs font-semibold tracking-wide text-[var(--text-soft)] uppercase">
-			language
+			{m.nav_language()}
 		</p>
 		<div class="grid grid-cols-3 gap-2">
 			{#each locales as locale (locale)}
@@ -327,7 +323,7 @@
 <nav
 	class="mobile-tabbar fixed inset-x-0 bottom-0 z-50 border-t border-[var(--border)] bg-[var(--bg-elevated)]/95 shadow-[0_-10px_30px_rgba(24,46,98,0.16)] backdrop-blur-sm md:hidden"
 >
-	<div class="mx-auto max-w-6xl px-2 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+0.35rem)]">
+	<div class="mx-auto max-w-6xl px-1.5 pt-1 pb-[calc(env(safe-area-inset-bottom)+0.35rem)]">
 		<div
 			class="grid gap-1"
 			style={`grid-template-columns: repeat(${mobileTabItems.length}, minmax(0, 1fr));`}

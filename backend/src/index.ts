@@ -5,6 +5,7 @@ import {cleanerRoutes} from "./routes/cleaner";
 import {supervisorRoutes} from "./routes/supervisor";
 import {adminRoutes} from "./routes/admin";
 import {feedbackRoutes} from "./routes/feedback";
+import {syncRoutes} from "./routes/sync";
 import {config} from "./utils/config";
 import {runMigrations} from "./database/migrate";
 
@@ -17,7 +18,8 @@ const app = new Elysia()
   .use(cleanerRoutes)
   .use(supervisorRoutes)
   .use(adminRoutes)
-    .use(feedbackRoutes)
+  .use(feedbackRoutes)
+  .use(syncRoutes)
   .listen(config.PORT);
 
 console.log(

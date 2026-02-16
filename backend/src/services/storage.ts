@@ -4,13 +4,21 @@ import { nanoid } from "nanoid";
 
 const minioClient = new Minio.Client({
     endPoint: config.MINIO_ENDPOINT,
-    port: parseInt(config.MINIO_PORT),
-    useSSL: config.MINIO_USE_SSL === 'true',
+    port: config.MINIO_PORT,
+    useSSL: config.MINIO_USE_SSL,
     accessKey: config.MINIO_ACCESS_KEY,
     secretKey: config.MINIO_SECRET_KEY
 });
 
 const BUCKET_NAME = config.MINIO_BUCKET;
+
+function publicStorageBaseUrl() {
+    if (config.MINIO_PUBLIC_BASE_URL) return config.MINIO_PUBLIC_BASE_URL;
+    const protocol = config.MINIO_USE_SSL ? "https" : "http";
+    const defaultPort = config.MINIO_USE_SSL ? 443 : 80;
+    const port = config.MINIO_PORT === defaultPort ? "" : `:${config.MINIO_PORT}`;
+    return `${protocol}://${config.MINIO_ENDPOINT}${port}`;
+}
 
 // Ensure bucket exists on startup
 (async () => {
@@ -34,17 +42,5 @@ export async function uploadFile(file: File): Promise<string> {
         'Content-Type': file.type
     });
 
-    // Return a URL. 
-    // If MinIO is public, we can construct the URL directly.
-    // Or we can use presigned URLs. 
-    // For simplicity, assuming public read access or simple URL construction for now.
-    // Constructing public URL based on endpoint/bucket/filename
-    
-    const protocol = config.MINIO_USE_SSL === 'true' ? 'https' : 'http';
-    const port = config.MINIO_PORT ? `:${config.MINIO_PORT}` : '';
-    // If endpoint is localhost, we need to be careful about what the client can reach.
-    // Usually invalid in production to return localhost/minio to frontend.
-    // But for hackathon/dev it's fine.
-    
-    return `${protocol}://${config.MINIO_ENDPOINT}${port}/${BUCKET_NAME}/${filename}`;
+    return `${publicStorageBaseUrl()}/${BUCKET_NAME}/${filename}`;
 }

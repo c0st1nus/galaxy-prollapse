@@ -5,6 +5,7 @@ import {and, asc, eq} from "drizzle-orm";
 import {jwt} from "@elysiajs/jwt";
 import {config} from "../utils/config";
 import type {JwtPayload} from "../utils/types";
+import {normalizeUserRole} from "../utils/roles";
 
 export const feedbackRoutes = new Elysia({prefix: "/feedback"})
     .use(
@@ -25,9 +26,14 @@ export const feedbackRoutes = new Elysia({prefix: "/feedback"})
             set.status = 401;
             throw new Error("Unauthorized");
         }
+        const role = normalizeUserRole(profile.role);
+        if (!role) {
+            set.status = 403;
+            throw new Error("Forbidden: only clients can manage feedback");
+        }
         const user: JwtPayload = {
             id: Number(profile.id),
-            role: profile.role as JwtPayload["role"],
+            role,
             company_id: Number(profile.company_id),
         };
         if (user.role !== "client") {

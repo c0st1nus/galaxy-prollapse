@@ -1,12 +1,34 @@
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
+
 export type DeviceCoordinates = {
 	latitude: number;
 	longitude: number;
 	accuracy?: number;
 };
 
-export function readCurrentPosition(timeoutMs = 10_000): Promise<DeviceCoordinates> {
+export async function readCurrentPosition(timeoutMs = 10_000): Promise<DeviceCoordinates> {
+	if (Capacitor.isNativePlatform()) {
+		const perm = await Geolocation.checkPermissions();
+		if (perm.location !== 'granted' && perm.coarseLocation !== 'granted') {
+			const req = await Geolocation.requestPermissions();
+			if (req.location !== 'granted' && req.coarseLocation !== 'granted') {
+				throw new Error('location permission denied');
+			}
+		}
+		const pos = await Geolocation.getCurrentPosition({
+			enableHighAccuracy: true,
+			timeout: timeoutMs
+		});
+		return {
+			latitude: pos.coords.latitude,
+			longitude: pos.coords.longitude,
+			accuracy: pos.coords.accuracy ?? undefined
+		};
+	}
+
 	if (typeof window === 'undefined' || !('geolocation' in navigator)) {
-		return Promise.reject(new Error('geolocation is not available on this device'));
+		throw new Error('geolocation is not available on this device');
 	}
 	return new Promise((resolve, reject) => {
 		navigator.geolocation.getCurrentPosition(

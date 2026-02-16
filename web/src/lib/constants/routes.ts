@@ -1,5 +1,6 @@
 import { localizeHref } from '$lib/paraglide/runtime.js';
 import type { UserRole } from '$lib/api';
+import { normalizeUserRoleOrDefault } from '$lib/roles';
 
 export type RoleDashboardRoute = '/app/admin' | '/app/supervisor' | '/app/cleaner' | '/app/client';
 
@@ -33,9 +34,10 @@ export function routeHref(route: AppRoute) {
 	return localizeHref(route) as AppRoute;
 }
 
-export function roleDashboardRoute(role: UserRole): RoleDashboardRoute {
-	if (role === 'admin') return ROUTES.appAdmin;
-	if (role === 'supervisor') return ROUTES.appSupervisor;
-	if (role === 'cleaner') return ROUTES.appCleaner;
+export function roleDashboardRoute(role: UserRole | string): RoleDashboardRoute {
+	const normalizedRole = normalizeUserRoleOrDefault(role);
+	if (normalizedRole === 'admin') return ROUTES.appAdmin;
+	if (normalizedRole === 'supervisor') return ROUTES.appSupervisor;
+	if (normalizedRole === 'cleaner') return ROUTES.appCleaner;
 	return ROUTES.appClient;
 }

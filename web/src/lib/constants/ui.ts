@@ -1,7 +1,7 @@
 export const ui = {
-	page: 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10',
-	panel: 'surface-card p-5 sm:p-6',
-	panelSm: 'surface-card p-6 sm:p-8',
+	page: 'mx-auto w-full max-w-6xl px-3 py-4 sm:px-6 sm:py-8 lg:px-10',
+	panel: 'surface-card p-4 sm:p-6',
+	panelSm: 'surface-card p-4 sm:p-7',
 	label: 'grid gap-1.5 text-sm font-semibold text-[var(--text-soft)]',
 	input: 'field-control',
 	inputWithIcon: 'field-with-icon',
@@ -16,6 +16,6 @@ export const ui = {
 	alertError: 'alert alert-error',
 	tableWrap: 'table-shell',
 	table: 'table-base',
-	sectionTitle: 'flex items-center gap-2 text-2xl font-extrabold',
+	sectionTitle: 'flex items-center gap-2 text-xl font-extrabold sm:text-2xl',
 	sectionLead: 'mt-2 text-[var(--text-soft)]'
 } as const;
