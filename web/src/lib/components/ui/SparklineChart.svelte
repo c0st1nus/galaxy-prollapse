@@ -32,12 +32,12 @@
 	});
 </script>
 
-<article class="surface-soft p-4">
+<article class="surface-soft p-3.5 sm:p-4">
 	<p class="text-sm font-semibold text-[var(--text-soft)]">{title}</p>
 	{#if values.length === 0}
 		<p class="mt-3 text-sm text-[var(--text-soft)]">{emptyText}</p>
 	{:else}
-		<svg class="mt-3 h-36 w-full" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
+		<svg class="mt-3 h-32 w-full sm:h-36" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
 			<polyline
 				{points}
 				fill="none"
@@ -55,7 +55,7 @@
 				<circle cx={x} cy={y} r="3" fill={color} />
 			{/each}
 		</svg>
-		<div class="mt-2 flex flex-wrap gap-2 text-[11px] text-[var(--text-soft)]">
+		<div class="mt-2 flex flex-wrap gap-2 text-[10px] text-[var(--text-soft)] sm:text-[11px]">
 			{#each labels as label, index (index)}
 				<span class="chip">{label}: {values[index] ?? 0}</span>
 			{/each}

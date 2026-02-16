@@ -47,6 +47,14 @@ export type AdminRoomRow = {
 	object_id: number;
 	type: 'office' | 'bathroom' | 'corridor';
 	area_sqm: number;
+	objectAddress?: string;
+};
+
+export type AdminUserRow = {
+	id: number;
+	name: string;
+	email: string;
+	role: UserRole;
 };
 
 export type TaskRow = {
@@ -58,6 +66,21 @@ export type TaskRow = {
 	photo_after: string | null;
 	timestamp_start: string | null;
 	timestamp_end: string | null;
+};
+
+export type AdminTaskRow = {
+	id: number;
+	room_id: number;
+	cleaner_id: number;
+	status: TaskStatus;
+	timestamp_start: string | null;
+	timestamp_end: string | null;
+	room_type: 'office' | 'bathroom' | 'corridor';
+	room_area_sqm: number;
+	object_id: number;
+	object_address: string;
+	cleaner_name: string;
+	cleaner_email: string;
 };
 
 export type TaskAiStatus = 'not_requested' | 'pending' | 'succeeded' | 'failed';
@@ -77,6 +100,8 @@ export type TaskChecklistItem = {
 	title: string;
 	done: boolean;
 	note?: string;
+	photo_required?: boolean;
+	photo_url?: string;
 };
 
 export type TaskChecklist = {
@@ -166,6 +191,10 @@ export type CleanerTaskRow = {
 		company_id: number;
 		address: string;
 		description: string | null;
+		latitude?: string | null;
+		longitude?: string | null;
+		geofence_radius_meters?: number;
+		cleaning_standard?: string;
 	};
 };
 
@@ -317,7 +346,17 @@ export function adminCreateUser(
 	return request<AuthUser>('/admin/users', { method: 'POST', token, body: input });
 }
 
-export function adminCreateObject(token: string, input: { address: string; description?: string }) {
+export function adminCreateObject(
+	token: string,
+	input: {
+		address: string;
+		description?: string;
+		latitude?: number;
+		longitude?: number;
+		geofence_radius_meters?: number;
+		cleaning_standard?: string;
+	}
+) {
 	return request<AdminObjectRow>('/admin/objects', { method: 'POST', token, body: input });
 }
 
@@ -332,8 +371,105 @@ export function adminCreateTask(token: string, input: { room_id: number; cleaner
 	return request<TaskRow>('/admin/tasks', { method: 'POST', token, body: input });
 }
 
+export function adminGetTasks(token: string) {
+	return request<AdminTaskRow[]>('/admin/tasks', { token });
+}
+
 export function adminGetObjectsStatus(token: string) {
 	return request<ObjectStatusRow[]>('/admin/objects/status', { token });
+}
+
+export function adminGetUsers(token: string) {
+	return request<AdminUserRow[]>('/admin/users', { token });
+}
+
+export function adminPatchUser(
+	token: string,
+	userId: number,
+	input: {
+		name?: string;
+		email?: string;
+		role?: UserRole;
+		password?: string;
+	}
+) {
+	return request<AdminUserRow>(`/admin/users/${userId}`, { method: 'PATCH', token, body: input });
+}
+
+export function adminDeleteUser(token: string, userId: number) {
+	return request<{ message: string; deletedUserId?: number }>(`/admin/users/${userId}`, {
+		method: 'DELETE',
+		token
+	});
+}
+
+export function adminGetRooms(token: string) {
+	return request<AdminRoomRow[]>('/admin/rooms', { token });
+}
+
+export function adminPatchObject(
+	token: string,
+	objectId: number,
+	input: { address?: string; description?: string }
+) {
+	return request<AdminObjectRow>(`/admin/objects/${objectId}`, {
+		method: 'PATCH',
+		token,
+		body: input
+	});
+}
+
+export function adminDeleteObject(token: string, objectId: number) {
+	return request<{ message: string; deletedObjectId?: number }>(`/admin/objects/${objectId}`, {
+		method: 'DELETE',
+		token
+	});
+}
+
+export function adminPatchRoom(
+	token: string,
+	roomId: number,
+	input: {
+		object_id?: number;
+		type?: 'office' | 'bathroom' | 'corridor';
+		area_sqm?: number;
+	}
+) {
+	return request<AdminRoomRow>(`/admin/rooms/${roomId}`, {
+		method: 'PATCH',
+		token,
+		body: input
+	});
+}
+
+export function adminDeleteRoom(token: string, roomId: number) {
+	return request<{ message: string; deletedRoomId?: number }>(`/admin/rooms/${roomId}`, {
+		method: 'DELETE',
+		token
+	});
+}
+
+export function adminPatchTask(
+	token: string,
+	taskId: number,
+	input: {
+		room_id?: number;
+		cleaner_id?: number;
+		status?: TaskStatus;
+	}
+) {
+	return request<TaskRow>(`/admin/tasks/${taskId}`, {
+		method: 'PATCH',
+		token,
+		body: input
+	});
+}
+
+export function adminDeleteTask(token: string, taskId: number) {
+	return request<{ message: string; deletedTaskId?: number }>(`/admin/tasks/${taskId}`, {
+		method: 'DELETE',
+		token
+	});
 }
 
 export function adminGetEfficiency(token: string) {
@@ -454,6 +590,21 @@ export function cleanerPatchTaskChecklist(
 		token,
 		body: input
 	});
+}
+
+export function cleanerUploadChecklistPhoto(
+	token: string,
+	taskId: number,
+	itemId: string,
+	photo: File
+) {
+	const formData = new FormData();
+	formData.append('photo', photo);
+	formData.append('item_id', itemId);
+	return request<{ item_id: string; photo_url: string }>(
+		`/tasks/${taskId}/checklist/upload`,
+		{ method: 'POST', token, formData }
+	);
 }
 
 export function cleanerGetTaskAiRating(token: string, taskId: number) {
@@ -614,6 +765,63 @@ export function feedbackUpdate(
 
 export function feedbackDelete(token: string, feedbackId: number) {
 	return request<{ message: string }>(`/feedback/${feedbackId}`, { method: 'DELETE', token });
+}
+
+export type QuestionOption = {
+	value: string;
+	label: string;
+};
+
+export type Question = {
+	id: string;
+	text: string;
+	type: 'single' | 'multi' | 'boolean';
+	options?: QuestionOption[];
+	condition?: {
+		question_id: string;
+		values: string[];
+	};
+};
+
+export type QuestionnaireAnswer = {
+	question_id: string;
+	answer: string | string[];
+};
+
+export type QuestionnaireChecklistItem = {
+	id: string;
+	title: string;
+	done: boolean;
+	photo_required: boolean;
+	note?: string;
+};
+
+export type QuestionnaireState = {
+	task_id: number;
+	room_type: string;
+	cleaning_standard: string;
+	current_answers: QuestionnaireAnswer[];
+	next_questions: Question[];
+	is_complete: boolean;
+	determined_appa_level: number | null;
+	appa_label: string | null;
+	generated_checklist: QuestionnaireChecklistItem[] | null;
+};
+
+export function cleanerGetQuestionnaire(token: string, taskId: number) {
+	return request<QuestionnaireState>(`/tasks/${taskId}/questionnaire`, { token });
+}
+
+export function cleanerSubmitQuestionnaire(
+	token: string,
+	taskId: number,
+	answers: QuestionnaireAnswer[]
+) {
+	return request<QuestionnaireState>(`/tasks/${taskId}/questionnaire`, {
+		method: 'POST',
+		token,
+		body: { answers }
+	});
 }
 
 export function getApiBaseUrl() {

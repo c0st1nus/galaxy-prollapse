@@ -50,91 +50,65 @@
 	<title>{m.register_title()}</title>
 </svelte:head>
 
-<main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-10">
-	<div class="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-start lg:gap-10">
-		<section class="float-in">
-			<a
-				href={resolve(routeHref(ROUTES.home))}
-				class="inline-flex items-center gap-3 text-[var(--brand)]"
+<main
+	class="mx-auto flex min-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-md flex-col justify-start px-3 py-3 sm:justify-center sm:px-4 sm:py-10"
+>
+	<a
+		href={resolve(routeHref(ROUTES.home))}
+		class="mb-4 inline-flex w-fit items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm font-semibold text-[var(--text-soft)] shadow-sm transition hover:bg-[var(--bg-muted)]"
+	>
+		<AppIcon name="chevron-right" class="h-4 w-4 rotate-180" />
+		{m.nav_home()}
+	</a>
+
+	<!-- Brand mark -->
+	<div class="mb-5 flex flex-col items-center gap-2 text-center sm:mb-8">
+		<a href={resolve(routeHref(ROUTES.home))} class="inline-flex flex-col items-center gap-2">
+			<div
+				class="grid h-14 w-14 place-content-center rounded-2xl border border-[var(--brand-soft)] bg-[var(--bg-elevated)] p-1.5 shadow-sm"
 			>
-				<div
-					class="grid h-12 w-12 place-content-center rounded-2xl border border-[var(--brand-soft)] bg-[var(--bg-elevated)] p-1 shadow-sm"
-				>
-					<img src={logo} alt={m.app_brand()} class="h-full w-full object-contain" />
-				</div>
-				<span class="text-3xl font-extrabold tracking-tight sm:text-5xl">{m.app_brand()}</span>
-			</a>
-
-			<p
-				class="mt-5 text-xl font-semibold tracking-[0.16em] text-[var(--text-soft)] uppercase sm:text-3xl"
-			>
-				{m.register_heading()}
-			</p>
-
-			<p class="mt-8 max-w-xl text-lg leading-relaxed text-[var(--text-soft)] sm:mt-10 sm:text-xl">
-				{m.register_intro()}
-			</p>
-
-			<div class="mt-8 grid max-w-xl gap-5">
-				<article class="surface-card p-5">
-					<div class="flex items-center gap-4">
-						<div class="grid h-12 w-12 place-content-center rounded-2xl bg-[var(--bg-muted)]">
-							<AppIcon name="mail" class="h-6 w-6 text-[var(--brand)]" />
-						</div>
-						<div>
-							<p class="text-sm text-[var(--brand)] sm:text-base">
-								{m.register_contact_email_label()}
-							</p>
-							<p class="text-xl font-semibold break-all sm:text-2xl">contact@tinytidy.com</p>
-						</div>
-					</div>
-				</article>
-
-				<article class="surface-card p-5">
-					<div class="flex items-center gap-4">
-						<div class="grid h-12 w-12 place-content-center rounded-2xl bg-[var(--bg-muted)]">
-							<AppIcon name="phone" class="h-6 w-6 text-[var(--brand)]" />
-						</div>
-						<div>
-							<p class="text-sm text-[var(--brand)] sm:text-base">
-								{m.register_contact_phone_label()}
-							</p>
-							<p class="text-xl font-semibold sm:text-2xl">+7 (747) 123-32-13</p>
-						</div>
-					</div>
-				</article>
+				<img src={logo} alt={m.app_brand()} class="h-full w-full object-contain" />
 			</div>
-		</section>
+			<span class="text-xl font-extrabold tracking-tight text-[var(--brand)] sm:text-2xl"
+				>{m.app_brand()}</span
+			>
+		</a>
+		<p class="text-sm text-[var(--text-soft)]">{m.register_intro()}</p>
+	</div>
 
-		<section
-			class="float-in surface-card bg-[var(--bg-elevated)]/90 p-5 backdrop-blur delay-1 sm:p-8 lg:p-10"
-		>
-			{#if error}
-				<FlashMessage kind="error" text={error} />
-			{/if}
+	{#if error}
+		<FlashMessage kind="error" text={error} />
+	{/if}
 
-			<form class="mt-4 grid gap-4" onsubmit={submitRegister}>
+	<div class="surface-card overflow-hidden">
+		<div class="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3 sm:px-6">
+			<AppIcon name="user" class="h-5 w-5 text-[var(--brand)]" />
+			<h2 class="text-base font-bold">{m.register_heading()}</h2>
+		</div>
+
+		<form class="grid gap-4 p-3.5 sm:p-6" onsubmit={submitRegister}>
+			<label class={ui.label}>
+				<span class="label-title">
+					<AppIcon name="building" class="h-4 w-4" />{m.auth_company_name_label()}
+				</span>
+				<div class={ui.inputWithIcon}>
+					<AppIcon name="building" class={ui.inputIcon} />
+					<input
+						required
+						class={ui.inputPadded}
+						type="text"
+						bind:value={form.companyName}
+						placeholder={m.auth_company_name_placeholder()}
+						autocomplete="organization"
+					/>
+				</div>
+			</label>
+
+			<div class="grid gap-4 sm:grid-cols-2">
 				<label class={ui.label}>
-					<span class="label-title"
-						><AppIcon name="building" class="h-4 w-4" />{m.auth_company_name_label()}</span
-					>
-					<div class={ui.inputWithIcon}>
-						<AppIcon name="building" class={ui.inputIcon} />
-						<input
-							required
-							class={ui.inputPadded}
-							type="text"
-							bind:value={form.companyName}
-							placeholder={m.auth_company_name_placeholder()}
-							autocomplete="organization"
-						/>
-					</div>
-				</label>
-
-				<label class={ui.label}>
-					<span class="label-title"
-						><AppIcon name="user" class="h-4 w-4" />{m.register_first_name_label()}</span
-					>
+					<span class="label-title">
+						<AppIcon name="user" class="h-4 w-4" />{m.register_first_name_label()}
+					</span>
 					<div class={ui.inputWithIcon}>
 						<AppIcon name="user" class={ui.inputIcon} />
 						<input
@@ -149,9 +123,9 @@
 				</label>
 
 				<label class={ui.label}>
-					<span class="label-title"
-						><AppIcon name="users" class="h-4 w-4" />{m.register_last_name_label()}</span
-					>
+					<span class="label-title">
+						<AppIcon name="users" class="h-4 w-4" />{m.register_last_name_label()}
+					</span>
 					<div class={ui.inputWithIcon}>
 						<AppIcon name="users" class={ui.inputIcon} />
 						<input
@@ -164,83 +138,89 @@
 						/>
 					</div>
 				</label>
+			</div>
 
-				<label class={ui.label}>
-					<span class="label-title"
-						><AppIcon name="phone" class="h-4 w-4" />{m.register_phone_label()}</span
-					>
-					<div class={ui.inputWithIcon}>
-						<AppIcon name="phone" class={ui.inputIcon} />
-						<input
-							class={ui.inputPadded}
-							type="tel"
-							bind:value={form.phone}
-							placeholder={m.register_phone_placeholder()}
-							autocomplete="tel"
-						/>
-					</div>
-				</label>
-
-				<label class={ui.label}>
-					<span class="label-title"
-						><AppIcon name="mail" class="h-4 w-4" />{m.register_email_label()}</span
-					>
-					<div class={ui.inputWithIcon}>
-						<AppIcon name="mail" class={ui.inputIcon} />
-						<input
-							required
-							class={ui.inputPadded}
-							type="email"
-							bind:value={form.email}
-							placeholder={m.register_email_placeholder()}
-							autocomplete="email"
-						/>
-					</div>
-				</label>
-
-				<label class={ui.label}>
-					<span class="label-title"
-						><AppIcon name="lock" class="h-4 w-4" />{m.register_password_label()}</span
-					>
-					<div class={ui.inputWithIcon}>
-						<AppIcon name="lock" class={ui.inputIcon} />
-						<input
-							required
-							minlength="8"
-							class={ui.inputPadded}
-							type="password"
-							bind:value={form.password}
-							placeholder={m.register_password_placeholder()}
-							autocomplete="new-password"
-						/>
-					</div>
-				</label>
-
-				<label
-					class="mt-2 inline-flex items-center gap-3 text-sm font-semibold text-[var(--text-soft)] sm:text-base"
-				>
+			<label class={ui.label}>
+				<span class="label-title">
+					<AppIcon name="phone" class="h-4 w-4" />{m.register_phone_label()}
+				</span>
+				<div class={ui.inputWithIcon}>
+					<AppIcon name="phone" class={ui.inputIcon} />
 					<input
-						type="checkbox"
-						bind:checked={form.privacyAccepted}
-						class="h-5 w-5 rounded border-[var(--border)] accent-[var(--brand)]"
-						required
+						class={ui.inputPadded}
+						type="tel"
+						bind:value={form.phone}
+						placeholder={m.register_phone_placeholder()}
+						autocomplete="tel"
 					/>
-					<span class="inline-flex items-center gap-2"
-						><AppIcon name="shield" class="h-4 w-4" />{m.register_privacy_consent()}</span
-					>
-				</label>
-
-				<div class="mt-4 grid gap-3 sm:grid-cols-2">
-					<button type="submit" disabled={loading} class={ui.primaryButton}>
-						<AppIcon name="plus" class="h-4 w-4" />
-						{loading ? m.auth_loading() : m.register_create_account()}
-					</button>
-					<a href={resolve(routeHref(ROUTES.auth))} class={ui.secondaryButton}>
-						<AppIcon name="log-out" class="h-4 w-4" />
-						{m.register_sign_in()}
-					</a>
 				</div>
-			</form>
-		</section>
+			</label>
+
+			<label class={ui.label}>
+				<span class="label-title">
+					<AppIcon name="mail" class="h-4 w-4" />{m.register_email_label()}
+				</span>
+				<div class={ui.inputWithIcon}>
+					<AppIcon name="mail" class={ui.inputIcon} />
+					<input
+						required
+						class={ui.inputPadded}
+						type="email"
+						bind:value={form.email}
+						placeholder={m.register_email_placeholder()}
+						autocomplete="email"
+					/>
+				</div>
+			</label>
+
+			<label class={ui.label}>
+				<span class="label-title">
+					<AppIcon name="lock" class="h-4 w-4" />{m.register_password_label()}
+				</span>
+				<div class={ui.inputWithIcon}>
+					<AppIcon name="lock" class={ui.inputIcon} />
+					<input
+						required
+						minlength="8"
+						class={ui.inputPadded}
+						type="password"
+						bind:value={form.password}
+						placeholder={m.register_password_placeholder()}
+						autocomplete="new-password"
+					/>
+				</div>
+			</label>
+
+			<label
+				class="mt-1 inline-flex items-center gap-3 text-sm font-semibold text-[var(--text-soft)]"
+			>
+				<input
+					type="checkbox"
+					bind:checked={form.privacyAccepted}
+					class="h-5 w-5 rounded border-[var(--border)] accent-[var(--brand)]"
+					required
+				/>
+				<span class="inline-flex items-center gap-2">
+					<AppIcon name="shield" class="h-4 w-4" />{m.register_privacy_consent()}
+				</span>
+			</label>
+
+			<button type="submit" disabled={loading} class={`mt-1 ${ui.primaryButton}`}>
+				<AppIcon name="plus" class="h-4 w-4" />
+				{loading ? m.auth_loading() : m.register_create_account()}
+			</button>
+		</form>
 	</div>
+
+	<!-- Sign-in link -->
+	<a
+		href={resolve(routeHref(ROUTES.auth))}
+		class="mt-4 flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3.5 py-2.5 shadow-sm transition hover:bg-[var(--bg-muted)] sm:px-4 sm:py-3"
+	>
+		<span class="inline-flex items-center gap-2 text-sm font-semibold">
+			<AppIcon name="log-out" class="h-4 w-4 text-[var(--brand)]" />
+			{m.register_sign_in()}
+		</span>
+		<AppIcon name="arrow-right" class="h-4 w-4 text-[var(--text-soft)]" />
+	</a>
 </main>

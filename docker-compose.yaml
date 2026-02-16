@@ -1,3 +1,6 @@
+# Usage:
+#   docker compose up -d                      # postgres + minio
+#   docker compose --profile full up -d       # postgres + minio + backend
 services:
     db:
         image: postgres:15-alpine

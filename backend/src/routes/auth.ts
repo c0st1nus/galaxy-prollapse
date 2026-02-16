@@ -4,6 +4,7 @@ import {db} from "../database";
 import {companies, users} from "../database/schema";
 import {eq, ilike} from "drizzle-orm";
 import {config} from "../utils/config";
+import {normalizeUserRole} from "../utils/roles";
 
 
 export const authRoutes = new Elysia({ prefix: "/auth" })
@@ -76,12 +77,17 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         set.status = 401;
         return { message: "Invalid credentials" };
       }
+      const normalizedRole = normalizeUserRole(user.role);
+      if (!normalizedRole) {
+        set.status = 403;
+        return { message: "User role is invalid. Contact your administrator." };
+      }
 
       const company = await db.select().from(companies).where(eq(companies.id, user.company_id));
 
       const token = await jwt.sign({
           id: String(user.id),
-        role: user.role,
+        role: normalizedRole,
           company_id: String(user.company_id)
       });
 
@@ -90,7 +96,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         user: {
             id: user.id,
             name: user.name,
-            role: user.role,
+            role: normalizedRole,
             company_id: user.company_id
         },
         company: company[0]
