@@ -1,0 +1,21 @@
+export const ui = {
+	page: 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10',
+	panel: 'surface-card p-5 sm:p-6',
+	panelSm: 'surface-card p-6 sm:p-8',
+	label: 'grid gap-1.5 text-sm font-semibold text-[var(--text-soft)]',
+	input: 'field-control',
+	inputWithIcon: 'field-with-icon',
+	inputIcon: 'field-icon h-4 w-4',
+	inputPadded: 'field-control field-control-with-icon',
+	textarea: 'field-control min-h-24 resize-y',
+	primaryButton: 'btn btn-primary',
+	secondaryButton: 'btn btn-secondary',
+	ghostButton: 'btn btn-ghost',
+	dangerButton: 'btn btn-danger',
+	alertSuccess: 'alert alert-success',
+	alertError: 'alert alert-error',
+	tableWrap: 'table-shell',
+	table: 'table-base',
+	sectionTitle: 'flex items-center gap-2 text-2xl font-extrabold',
+	sectionLead: 'mt-2 text-[var(--text-soft)]'
+} as const;

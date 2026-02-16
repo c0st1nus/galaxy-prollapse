@@ -41,8 +41,20 @@ bun run dev
 - **Frontend**: `http://localhost:5173` (default Vite port)
 - **Backend API**: `http://localhost:3000` (default Elysia port)
 
+### Quick Frontend Testing Mode
+
+Run a separate quick-testing frontend mode (with backend) that enables a dev-only UI route:
+
+```bash
+bun run dev:quick
+```
+
+- **Dev-only frontend lab**: `http://localhost:5173/dev`
+- This route is disabled in normal `bun run dev` mode and in production builds.
+
 ## Scripts
 
 - `bun run dev`: Runs both frontend and backend in development mode.
+- `bun run dev:quick`: Runs backend + frontend quick-testing mode (`/dev` enabled).
 - `bun run build`: Builds both frontend and backend for production.
 - `bun run start`: Starts the production build for both.

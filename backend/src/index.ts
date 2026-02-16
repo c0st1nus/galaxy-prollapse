@@ -1,11 +1,12 @@
-import { Elysia } from "elysia";
-import { cors } from "@elysiajs/cors";
-import { authRoutes } from "./routes/auth";
-import { cleanerRoutes } from "./routes/cleaner";
-import { supervisorRoutes } from "./routes/supervisor";
-import { adminRoutes } from "./routes/admin";
-import { config } from "./utils/config";
-import { runMigrations } from "./database/migrate";
+import {Elysia} from "elysia";
+import {cors} from "@elysiajs/cors";
+import {authRoutes} from "./routes/auth";
+import {cleanerRoutes} from "./routes/cleaner";
+import {supervisorRoutes} from "./routes/supervisor";
+import {adminRoutes} from "./routes/admin";
+import {feedbackRoutes} from "./routes/feedback";
+import {config} from "./utils/config";
+import {runMigrations} from "./database/migrate";
 
 await runMigrations();
 
@@ -16,6 +17,7 @@ const app = new Elysia()
   .use(cleanerRoutes)
   .use(supervisorRoutes)
   .use(adminRoutes)
+    .use(feedbackRoutes)
   .listen(config.PORT);
 
 console.log(

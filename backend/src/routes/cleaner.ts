@@ -1,13 +1,17 @@
-import { Elysia, t } from "elysia";
-import { db } from "../database";
-import { tasks, rooms, objects } from "../database/schema";
-import { eq, and } from "drizzle-orm";
-import { jwt } from "@elysiajs/jwt";
-import { config } from "../utils/config";
-import { uploadFile } from "../services/storage";
+import {Elysia, t} from "elysia";
+import {db} from "../database";
+import {objects, rooms, tasks} from "../database/schema";
+import {and, eq, gte, lt, SQL} from "drizzle-orm";
+import {jwt} from "@elysiajs/jwt";
+import {config} from "../utils/config";
+import {uploadFile} from "../services/storage";
+import type {JwtPayload} from "../utils/types";
 
-// Mock middleware to check auth (derived from jwt) - using header for simplicity in this example
-// In production, use value from cookie or header and verify.
+function parseDateOnly(value: string) {
+    const [year, month, day] = value.split("-").map((part) => Number(part));
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day);
+}
 
 export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
   .use(
@@ -28,14 +32,45 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
         set.status = 401;
         throw new Error("Unauthorized");
     }
-    return { user: profile };
+      const user: JwtPayload = {
+          id: Number(profile.id),
+          role: profile.role as JwtPayload["role"],
+          company_id: Number(profile.company_id),
+      };
+      if (user.role !== "cleaner") {
+          set.status = 403;
+          throw new Error("Forbidden: only cleaners can access task routes");
+      }
+      return {user};
   })
-  .get("/my", async ({ user }) => {
-    // Implement: Get tasks for cleaner (today)
-    // For simplicity, returning all tasks assigned to me pending or in_progress
-    // In real app, filter by date.
-    
-    // Join with rooms and objects to get details
+    .get("/my", async ({user, query}) => {
+        // build dynamic filter conditions
+        const conditions: SQL[] = [
+            eq(tasks.cleaner_id, user.id),
+            eq(objects.company_id, user.company_id),
+        ];
+
+        // optional status filter
+        if (query.status) {
+            conditions.push(eq(tasks.status, query.status as "pending" | "in_progress" | "completed"));
+        }
+
+        // optional date range filter (on timestamp_start)
+        if (query.date_from) {
+            const dateFrom = parseDateOnly(query.date_from);
+            if (dateFrom) {
+                conditions.push(gte(tasks.timestamp_start, dateFrom));
+            }
+        }
+        if (query.date_to) {
+            const dateTo = parseDateOnly(query.date_to);
+            if (dateTo) {
+                // treat date_to as end of day by filtering to next-day exclusive boundary.
+                dateTo.setDate(dateTo.getDate() + 1);
+                conditions.push(lt(tasks.timestamp_start, dateTo));
+            }
+        }
+
     const result = await db.select({
         task: tasks,
         room: rooms,
@@ -44,14 +79,15 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
     .from(tasks)
     .innerJoin(rooms, eq(tasks.room_id, rooms.id))
     .innerJoin(objects, eq(rooms.object_id, objects.id))
-    .where(and(
-        eq(tasks.cleaner_id, user.id as number),
-        // @ts-ignore
-        eq(objects.company_id, user.company_id)
-        // eq(tasks.status, "pending") // or in_progress, showing all for now
-    ));
+        .where(and(...conditions));
     
     return result;
+    }, {
+        query: t.Object({
+            status: t.Optional(t.String()),
+            date_from: t.Optional(t.String()),
+            date_to: t.Optional(t.String()),
+        })
   })
   .patch("/:id/start", async ({ params, user, set, body }) => {
     const taskId = parseInt(params.id);
@@ -67,7 +103,7 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
             timestamp_start: new Date(),
             photo_before: photoBeforePath
         })
-        .where(and(eq(tasks.id, taskId), eq(tasks.cleaner_id, user.id as number)))
+        .where(and(eq(tasks.id, taskId), eq(tasks.cleaner_id, user.id)))
         .returning();
         
     if (!updated.length) {
@@ -93,9 +129,9 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
         .set({ 
             status: "completed",
             timestamp_end: new Date(),
-            photo_after: photoAfterPath // Assuming URL or base64 string
+            photo_after: photoAfterPath
         })
-        .where(and(eq(tasks.id, taskId), eq(tasks.cleaner_id, user.id as number)))
+        .where(and(eq(tasks.id, taskId), eq(tasks.cleaner_id, user.id)))
         .returning();
         
     if (!updated.length) {
