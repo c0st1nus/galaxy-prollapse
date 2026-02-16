@@ -11,6 +11,7 @@ node_modules
 # OS
 .DS_Store
 Thumbs.db
+.idea/
 
 # Env
 .env
@@ -23,3 +24,21 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 .internal_data
+
+# build artifacts (never commit)
+backend/dist/
+web/build/
+web/.svelte-kit/
+web/android/build/
+web/android/app/build/
+web/android/app/src/main/assets/public/
+web/android/app/src/main/assets/capacitor.config.json
+web/android/app/src/main/assets/capacitor.plugins.json
+web/android/app/src/main/res/xml/config.xml
+web/ios/App/App/public/
+web/ios/App/App/capacitor.config.json
+web/ios/App/App/config.xml
+web/ios/App/Pods/
+web/ios/App/build/
+web/ios/App/output/
+web/ios/DerivedData/

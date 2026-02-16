@@ -1,6 +1,6 @@
 import {Elysia, t} from "elysia";
 import {db} from "../database";
-import {feedback, objects} from "../database/schema";
+import {companies, feedback, objects} from "../database/schema";
 import {and, asc, eq} from "drizzle-orm";
 import {jwt} from "@elysiajs/jwt";
 import {config} from "../utils/config";
@@ -43,38 +43,57 @@ export const feedbackRoutes = new Elysia({prefix: "/feedback"})
         return {user};
     })
     // list available objects for this client's company (for feedback creation UI)
-    .get("/objects", async ({user}) => {
+    .get("/objects", async ({query, set}) => {
+        const companyRows = await db.select({id: companies.id})
+            .from(companies)
+            .where(eq(companies.id, query.company_id))
+            .limit(1);
+        if (!companyRows.length) {
+            set.status = 404;
+            return {message: "Company not found"};
+        }
+
         const result = await db.select({
             id: objects.id,
             address: objects.address,
             description: objects.description,
         })
             .from(objects)
-            .where(eq(objects.company_id, user.company_id))
+            .where(eq(objects.company_id, query.company_id))
             .orderBy(asc(objects.id));
 
         return result;
+    }, {
+        query: t.Object({
+            company_id: t.Integer(),
+        }),
     })
     // list feedback left by this client
-    .get("/my", async ({user}) => {
+    .get("/my", async ({user, query}) => {
+        const conditions = [eq(feedback.client_id, user.id)];
+        if (query.company_id !== undefined) {
+            conditions.push(eq(objects.company_id, query.company_id));
+        }
+
         const result = await db.select({
             feedback: feedback,
             object: objects,
         })
             .from(feedback)
             .innerJoin(objects, eq(feedback.object_id, objects.id))
-            .where(and(
-                eq(feedback.client_id, user.id),
-                eq(objects.company_id, user.company_id)
-            ));
+            .where(and(...conditions));
 
         return result;
+    }, {
+        query: t.Object({
+            company_id: t.Optional(t.Integer()),
+        }),
     })
     // create new feedback for an object
     .post("/", async ({body, user, set}) => {
         // verify object belongs to same company
         const obj = await db.select().from(objects).where(
-            and(eq(objects.id, body.object_id), eq(objects.company_id, user.company_id))
+            and(eq(objects.id, body.object_id), eq(objects.company_id, body.company_id))
         );
         if (!obj.length) {
             set.status = 403;
@@ -91,6 +110,7 @@ export const feedbackRoutes = new Elysia({prefix: "/feedback"})
         return newFeedback[0];
     }, {
         body: t.Object({
+            company_id: t.Integer(),
             object_id: t.Integer(),
             rating: t.Integer({minimum: 1, maximum: 5}),
             text: t.Optional(t.String()),

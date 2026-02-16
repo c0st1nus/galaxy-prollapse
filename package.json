@@ -9,35 +9,15 @@
     "infra:reset": "docker compose down -v",
     "infra:ps": "docker compose ps",
     "dev": "concurrently \"bun run dev:back\" \"bun run dev:front\"",
-    "dev:quick": "concurrently \"bun run dev:back\" \"bun run dev:front:quick\"",
     "dev:back": "bun run --cwd backend dev",
     "dev:front": "bun run --cwd web dev",
-    "dev:front:quick": "cross-env PUBLIC_ENABLE_DEV_UI=1 bun run --cwd web dev",
-    "build": "bun run build:back && bun run build:front",
+    "build": "bun run build:aws",
     "build:back": "bun run --cwd backend build",
     "build:front": "bun run --cwd web build",
-    "prod": "bun run build && bun run start",
-    "start": "concurrently \"bun run start:back\" \"bun run start:front\"",
-    "start:back": "bun run --cwd backend dist/index.js",
-    "start:front": "bun run --cwd web preview",
-    "docker:build": "docker build -f backend/Dockerfile backend -t galaxy-backend:latest",
-    "docker:up": "docker compose --profile full up -d --build",
-    "docker:down": "docker compose --profile full down"
+    "build:aws": "bun run build:back && bun run build:front",
+    "deploy:aws": "bun run build:aws"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1",
-    "cross-env": "^7.0.3"
-    "start:back": "bun run backend/dist/index.js",
-    "start:front": "cd web && bun run preview && cd ..",
-    "install:all": "bun install && concurrently \"cd backend && bun install\" \"cd web && bun install\"",
-    "pm2:start": "pm2 start ecosystem.config.cjs",
-    "pm2:stop": "pm2 stop all",
-    "pm2:delete": "pm2 delete all",
-    "pm2:logs": "pm2 logs",
-    "pm2:monit": "pm2 monit"
-  },
-  "devDependencies": {
-    "concurrently": "latest",
-    "pm2": "^6.0.14"
+    "concurrently": "^9.2.1"
   }
 }

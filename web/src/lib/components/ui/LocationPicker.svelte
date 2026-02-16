@@ -61,7 +61,8 @@
 		(z: number, x: number, y: number) => `https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`,
 		(z: number, x: number, y: number) => `https://b.tile.openstreetmap.org/${z}/${x}/${y}.png`,
 		(z: number, x: number, y: number) => `https://c.tile.openstreetmap.org/${z}/${x}/${y}.png`,
-		(z: number, x: number, y: number) => `https://basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png`
+		(z: number, x: number, y: number) =>
+			`https://basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png`
 	] as const;
 
 	/** Map locale to Nominatim Accept-Language value */
@@ -111,7 +112,11 @@
 		return Math.pow(2, zoom) * TILE_SIZE;
 	}
 
-	function worldToLatLon(worldX: number, worldY: number, zoom: number): { lat: number; lon: number } {
+	function worldToLatLon(
+		worldX: number,
+		worldY: number,
+		zoom: number
+	): { lat: number; lon: number } {
 		const size = worldSizePx(zoom);
 		const wrappedX = ((worldX % size) + size) % size;
 		const clampedY = Math.max(0, Math.min(size - 1, worldY));
@@ -160,14 +165,17 @@
 		return `${latPart}|${lonPart}|${item.display_name.toLowerCase()}`;
 	}
 
-	function mergeSuggestions(local: LocationSuggestion[], global: LocationSuggestion[]): LocationSuggestion[] {
+	function mergeSuggestions(
+		local: LocationSuggestion[],
+		global: LocationSuggestion[]
+	): LocationSuggestion[] {
 		const merged: LocationSuggestion[] = [];
-		const seen = new Set<string>();
+		const seen: Record<string, true> = {};
 		const append = (rows: LocationSuggestion[]) => {
 			for (const row of rows) {
 				const key = suggestionKey(row);
-				if (seen.has(key)) continue;
-				seen.add(key);
+				if (seen[key]) continue;
+				seen[key] = true;
 				merged.push(row);
 				if (merged.length >= SEARCH_MAX_RESULTS) return;
 			}
@@ -177,20 +185,22 @@
 		return merged;
 	}
 
-	function nominatimSearchParams(q: string, limit: number, countrycodes?: string): URLSearchParams {
-		const params = new URLSearchParams({
+	function nominatimSearchParams(q: string, limit: number, countrycodes?: string): string {
+		const params: Record<string, string> = {
 			format: 'jsonv2',
 			q,
 			limit: String(limit),
 			addressdetails: '0',
 			dedupe: '0'
-		});
-		if (countrycodes) params.set('countrycodes', countrycodes);
-		return params;
+		};
+		if (countrycodes) params.countrycodes = countrycodes;
+		return Object.entries(params)
+			.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+			.join('&');
 	}
 
 	async function fetchSuggestions(
-		params: URLSearchParams,
+		params: string,
 		controller: AbortController
 	): Promise<LocationSuggestion[]> {
 		const url = `https://nominatim.openstreetmap.org/search?${params}`;
@@ -258,11 +268,7 @@
 		query = item.display_name;
 		showSuggestions = false;
 		suggestions = [];
-		notifyChange(
-			Number(item.lat).toFixed(6),
-			Number(item.lon).toFixed(6),
-			item.display_name
-		);
+		notifyChange(Number(item.lat).toFixed(6), Number(item.lon).toFixed(6), item.display_name);
 	}
 
 	async function useDeviceGps() {
@@ -294,10 +300,9 @@
 	}
 
 	function reverseGeocode(lat: string, lng: string) {
-		fetch(
-			`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-			{ headers: { 'Accept-Language': nominatimLang() } }
-		)
+		fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+			headers: { 'Accept-Language': nominatimLang() }
+		})
 			.then((res) => (res.ok ? res.json() : null))
 			.then((data) => {
 				if (data?.display_name) {
@@ -404,6 +409,33 @@
 		if (event.deltaY > 0) zoomBy(-1);
 	}
 
+	function handleMapKeyDown(event: KeyboardEvent) {
+		if (event.key === '+' || event.key === '=') {
+			event.preventDefault();
+			zoomBy(1);
+			return;
+		}
+		if (event.key === '-' || event.key === '_') {
+			event.preventDefault();
+			zoomBy(-1);
+			return;
+		}
+
+		let dx = 0;
+		let dy = 0;
+		const step = event.shiftKey ? 96 : 48;
+		if (event.key === 'ArrowUp') dy = -step;
+		else if (event.key === 'ArrowDown') dy = step;
+		else if (event.key === 'ArrowLeft') dx = -step;
+		else if (event.key === 'ArrowRight') dx = step;
+		if (!dx && !dy) return;
+
+		event.preventDefault();
+		const centerWorldX = lon2tile(resolvedLongitude(), mapZoom) * TILE_SIZE;
+		const centerWorldY = lat2tile(resolvedLatitude(), mapZoom) * TILE_SIZE;
+		setCenterFromWorldPixels(centerWorldX + dx, centerWorldY + dy);
+	}
+
 	function lon2tile(lon: number, zoom: number) {
 		return ((lon + 180) / 360) * Math.pow(2, zoom);
 	}
@@ -411,8 +443,7 @@
 	function lat2tile(lat: number, zoom: number) {
 		return (
 			((1 -
-				Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) /
-					Math.PI) /
+				Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) /
 				2) *
 			Math.pow(2, zoom)
 		);
@@ -467,7 +498,15 @@
 		const shiftY = centerRow * TILE_SIZE + fractY * TILE_SIZE;
 
 		const worldSize = Math.pow(2, zoom);
-		const tiles: Array<{ key: string; url: string; x: number; y: number; z: number; tx: number; ty: number }> = [];
+		const tiles: Array<{
+			key: string;
+			url: string;
+			x: number;
+			y: number;
+			z: number;
+			tx: number;
+			ty: number;
+		}> = [];
 		for (let dy = 0; dy < TILE_ROWS; dy++) {
 			for (let dx = 0; dx < TILE_COLS; dx++) {
 				const rawX = baseTileX + dx;
@@ -540,7 +579,7 @@
 					<li>
 						<button
 							type="button"
-							class="w-full px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)] transition"
+							class="w-full px-3 py-2 text-left text-sm transition hover:bg-[var(--bg-muted)]"
 							onmousedown={() => selectSuggestion(item)}
 						>
 							<AppIcon name="map-pin" class="mr-1.5 inline h-3.5 w-3.5 text-[var(--brand)]" />
@@ -578,20 +617,22 @@
 	</div>
 
 	{#if mapExpanded}
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex -->
 		<div
 			bind:this={mapContainer}
 			class={`relative h-[250px] w-full touch-none overflow-hidden rounded-xl border border-[var(--border)] ${mapIsDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
 			role="application"
+			tabindex="0"
 			aria-label={m.location_picker_map_aria()}
 			onclick={handleMapClick}
 			onwheel={handleMapWheel}
+			onkeydown={handleMapKeyDown}
 			onpointerdown={handleMapPointerDown}
 			onpointermove={handleMapPointerMove}
 			onpointerup={handleMapPointerUp}
 			onpointercancel={handleMapPointerCancel}
 		>
-			<div class="absolute right-2 top-2 z-10 flex flex-col gap-1">
+			<div class="absolute top-2 right-2 z-10 flex flex-col gap-1">
 				<button
 					type="button"
 					aria-label="Zoom in"
@@ -621,7 +662,9 @@
 					-
 				</button>
 			</div>
-			<span class="absolute left-2 top-2 z-10 rounded-md bg-black/50 px-2 py-0.5 text-xs text-white">
+			<span
+				class="absolute top-2 left-2 z-10 rounded-md bg-black/50 px-2 py-0.5 text-xs text-white"
+			>
 				z{mapZoom}
 			</span>
 			<div
@@ -646,7 +689,7 @@
 					/>
 				{/each}
 			</div>
-			<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+			<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
 				<div class="flex flex-col items-center">
 					<AppIcon name="map-pin" class="h-8 w-8 text-red-600 drop-shadow-lg" />
 					<div class="h-1 w-1 rounded-full bg-red-600"></div>

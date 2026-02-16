@@ -1,14 +1,25 @@
 import {Elysia, t} from "elysia";
 import {db} from "../database";
-import {geofenceViolations, objects, questionnaireResponses, rooms, taskChecklists, tasks} from "../database/schema";
+import {geofenceViolations, objectSessions, objects, questionnaireResponses, rooms, taskChecklists, tasks} from "../database/schema";
 import {and, eq, gte, lt, SQL} from "drizzle-orm";
 import {jwt} from "@elysiajs/jwt";
 import {config} from "../utils/config";
 import {uploadFile} from "../services/storage";
+import {validatePhotoFile} from "../services/photo";
+import {aiFeedbackForAudience, runCleaningAiReview} from "../services/ai-review";
 import {determineAppaLevel, APPA_LABELS, generateChecklistFromAnswers, getNextQuestions} from "../services/questionnaire";
 import type {JwtPayload} from "../utils/types";
 import type {QuestionnaireAnswer} from "../services/questionnaire";
 import {normalizeUserRole} from "../utils/roles";
+
+type TaskAiState = {
+    ai_status: "not_requested" | "pending" | "succeeded" | "failed";
+    ai_model: string | null;
+    ai_score: number | null;
+    ai_feedback: string | null;
+    ai_raw: unknown;
+    ai_rated_at: Date | null;
+};
 
 function parseDateOnly(value: string) {
     const [year, month, day] = value.split("-").map((part) => Number(part));
@@ -28,6 +39,34 @@ function buildTaskQuestionnaireCondition(taskId: number, user: JwtPayload): SQL 
         eq(tasks.id, taskId),
         eq(objects.company_id, user.company_id),
     ) as SQL;
+}
+
+function buildTaskAiRatingResponse(taskId: number, task: TaskAiState) {
+    const audienceFeedback = aiFeedbackForAudience(task.ai_raw, task.ai_feedback);
+    return {
+        task_id: taskId,
+        ai_status: task.ai_status,
+        ai_model: task.ai_model,
+        ai_score: task.ai_score,
+        ai_feedback: task.ai_feedback,
+        ai_feedback_cleaner: audienceFeedback.cleaner,
+        ai_feedback_supervisor: audienceFeedback.supervisor,
+        ai_review: audienceFeedback.review,
+        ai_raw: task.ai_raw,
+        ai_rated_at: task.ai_rated_at,
+    };
+}
+
+function checklistItemTitles(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((item) => {
+            if (!item || typeof item !== "object") return "";
+            const title = (item as {title?: unknown}).title;
+            return typeof title === "string" ? title.trim() : "";
+        })
+        .filter(Boolean)
+        .slice(0, 30);
 }
 
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -170,6 +209,27 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
         return { message: "Task not found or not assigned to you" };
     }
 
+    const activeSession = await db.select()
+        .from(objectSessions)
+        .where(and(
+            eq(objectSessions.object_id, taskRow[0].object.id),
+            eq(objectSessions.cleaner_id, user.id),
+            eq(objectSessions.status, "active"),
+        ))
+        .limit(1);
+    if (!activeSession.length) {
+        set.status = 403;
+        return { message: "Check in to this object before starting task work" };
+    }
+    if (!activeSession[0].current_inside_geofence) {
+        set.status = 403;
+        return { message: "You are outside the geofence. Return inside before starting task work" };
+    }
+    if (!body.latitude || !body.longitude) {
+        set.status = 400;
+        return { message: "GPS coordinates are required while working in geofenced mode" };
+    }
+
     // geofence validation
     const geo = await validateGeofence(
         taskRow[0].object, body.latitude, body.longitude,
@@ -182,14 +242,20 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
 
     let photoBeforePath = undefined;
     if (body.photo_before) {
+        try {
+            validatePhotoFile(body.photo_before, "photo_before");
+        } catch (err) {
+            set.status = 400;
+            return { message: err instanceof Error ? err.message : "Invalid photo_before" };
+        }
         photoBeforePath = await uploadFile(body.photo_before);
     }
 
     const updateData: Record<string, unknown> = {
         status: "in_progress",
         timestamp_start: new Date(),
-        photo_before: photoBeforePath,
     };
+    if (photoBeforePath) updateData.photo_before = photoBeforePath;
 
     // gps coordinates
     if (body.latitude) updateData.checkin_latitude = body.latitude;
@@ -223,6 +289,27 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
         return { message: "Task not found or not assigned to you" };
     }
 
+    const activeSession = await db.select()
+        .from(objectSessions)
+        .where(and(
+            eq(objectSessions.object_id, taskRow[0].object.id),
+            eq(objectSessions.cleaner_id, user.id),
+            eq(objectSessions.status, "active"),
+        ))
+        .limit(1);
+    if (!activeSession.length) {
+        set.status = 403;
+        return { message: "Check in to this object before completing task work" };
+    }
+    if (!activeSession[0].current_inside_geofence) {
+        set.status = 403;
+        return { message: "You are outside the geofence. Return inside before completing task work" };
+    }
+    if (!body.latitude || !body.longitude) {
+        set.status = 400;
+        return { message: "GPS coordinates are required while working in geofenced mode" };
+    }
+
     // geofence validation
     const geo = await validateGeofence(
         taskRow[0].object, body.latitude, body.longitude,
@@ -235,14 +322,30 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
 
     let photoAfterPath = undefined;
     if (body.photo_after) {
+        try {
+            validatePhotoFile(body.photo_after, "photo_after");
+        } catch (err) {
+            set.status = 400;
+            return { message: err instanceof Error ? err.message : "Invalid photo_after" };
+        }
         photoAfterPath = await uploadFile(body.photo_after);
+    }
+
+    const hasTaskPhoto = Boolean(
+        taskRow[0].task.photo_before ||
+        taskRow[0].task.photo_after ||
+        photoAfterPath
+    );
+    if (!hasTaskPhoto) {
+        set.status = 400;
+        return { message: "At least one task photo is required before completion" };
     }
 
     const updateData: Record<string, unknown> = {
         status: "completed",
         timestamp_end: new Date(),
-        photo_after: photoAfterPath,
     };
+    if (photoAfterPath) updateData.photo_after = photoAfterPath;
 
     // gps coordinates
     if (body.latitude) updateData.checkout_latitude = body.latitude;
@@ -280,12 +383,18 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
     // check for existing checklist
     const existing = await db.select().from(taskChecklists).where(eq(taskChecklists.task_id, taskId));
     if (existing.length) {
+        const normalizedItems = Array.isArray(existing[0].items)
+            ? (existing[0].items as Array<Record<string, unknown>>).map((item) => ({
+                ...item,
+                photo_required: false,
+            }))
+            : [];
         return {
             task_id: taskId,
             template_id: existing[0].template_id,
             room_type: taskRow[0].room.type,
             cleaning_standard: taskRow[0].object.cleaning_standard,
-            items: existing[0].items,
+            items: normalizedItems,
             completion_percent: existing[0].completion_percent,
             updated_at: existing[0].updated_at,
         };
@@ -313,16 +422,20 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
         return { message: "Task not found" };
     }
 
-    const items = body.items as Array<{ id: string; title: string; done: boolean; note?: string }>;
-    const total = items.length;
-    const done = items.filter((i) => i.done).length;
+    const items = body.items as Array<{ id: string; title: string; done: boolean; note?: string; photo_url?: string }>;
+    const normalizedItems = items.map((item) => ({
+        ...item,
+        photo_required: false,
+    }));
+    const total = normalizedItems.length;
+    const done = normalizedItems.filter((i) => i.done).length;
     const completionPercent = total > 0 ? Math.round((done / total) * 100) : 0;
 
     // upsert
     const existing = await db.select().from(taskChecklists).where(eq(taskChecklists.task_id, taskId));
     if (existing.length) {
         const updated = await db.update(taskChecklists)
-            .set({ items, completion_percent: completionPercent, updated_at: new Date() })
+            .set({ items: normalizedItems, completion_percent: completionPercent, updated_at: new Date() })
             .where(eq(taskChecklists.task_id, taskId))
             .returning();
         return {
@@ -335,7 +448,7 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
     } else {
         const inserted = await db.insert(taskChecklists).values({
             task_id: taskId,
-            items,
+            items: normalizedItems,
             completion_percent: completionPercent,
         }).returning();
         return {
@@ -370,6 +483,13 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
         return { message: "Task not found" };
     }
 
+    try {
+        validatePhotoFile(body.photo, "photo");
+    } catch (err) {
+        set.status = 400;
+        return { message: err instanceof Error ? err.message : "Invalid photo" };
+    }
+
     const photoUrl = await uploadFile(body.photo);
 
     // update the matching checklist item's photo_url
@@ -395,20 +515,96 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
   // ai rating: get current status
   .get("/:id/ai-rating", async ({ params, user, set }) => {
     const taskId = parseInt(params.id);
-    const taskRow = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.cleaner_id, user.id)));
+    const taskRow = await db.select({ task: tasks, room: rooms, object: objects })
+        .from(tasks)
+        .innerJoin(rooms, eq(tasks.room_id, rooms.id))
+        .innerJoin(objects, eq(rooms.object_id, objects.id))
+        .where(buildTaskQuestionnaireCondition(taskId, user));
     if (!taskRow.length) {
         set.status = 404;
         return { message: "Task not found" };
     }
-    return {
-        task_id: taskId,
-        ai_status: taskRow[0].ai_status,
-        ai_model: taskRow[0].ai_model,
-        ai_score: taskRow[0].ai_score,
-        ai_feedback: taskRow[0].ai_feedback,
-        ai_raw: taskRow[0].ai_raw,
-        ai_rated_at: taskRow[0].ai_rated_at,
-    };
+    return buildTaskAiRatingResponse(taskId, taskRow[0].task);
+  })
+  // ai rating: trigger for a task
+  .post("/:id/ai-rate", async ({ params, user, set }) => {
+    const taskId = parseInt(params.id);
+    const taskRow = await db.select({ task: tasks, room: rooms, object: objects })
+        .from(tasks)
+        .innerJoin(rooms, eq(tasks.room_id, rooms.id))
+        .innerJoin(objects, eq(rooms.object_id, objects.id))
+        .where(buildTaskQuestionnaireCondition(taskId, user));
+    if (!taskRow.length) {
+        set.status = 404;
+        return { message: "Task not found" };
+    }
+
+    const task = taskRow[0].task;
+    const room = taskRow[0].room;
+    const object = taskRow[0].object;
+
+    if (task.status !== "completed") {
+        set.status = 400;
+        return { message: "AI review can only run for completed tasks" };
+    }
+
+    const photoBeforeUrl = task.photo_before || task.photo_after;
+    const photoAfterUrl = task.photo_after || task.photo_before;
+    if (!photoBeforeUrl || !photoAfterUrl) {
+        set.status = 400;
+        return { message: "At least one task photo is required for AI review" };
+    }
+
+    const checklistRow = await db.select({
+        items: taskChecklists.items,
+    }).from(taskChecklists)
+        .where(eq(taskChecklists.task_id, taskId))
+        .limit(1);
+    const checklistItems = checklistItemTitles(checklistRow[0]?.items);
+
+    await db.update(tasks)
+        .set({ ai_status: "pending", ai_model: config.AI_REVIEW_MODEL })
+        .where(eq(tasks.id, taskId));
+
+    try {
+        const ai = await runCleaningAiReview({
+            taskId,
+            roomType: room.type,
+            areaSqm: room.area_sqm,
+            cleaningStandard: object.cleaning_standard,
+            objectAddress: object.address,
+            checklistItems,
+            photoBeforeUrl,
+            photoAfterUrl,
+        });
+
+        await db.update(tasks).set({
+            ai_status: "succeeded",
+            ai_model: ai.model,
+            ai_score: ai.review.score,
+            ai_feedback: ai.review.feedback_cleaner,
+            ai_raw: {
+                review: ai.review,
+                prompt: ai.prompt,
+                provider_response: ai.raw,
+            },
+            ai_rated_at: new Date(),
+        }).where(eq(tasks.id, taskId));
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "AI rating failed";
+        await db.update(tasks).set({
+            ai_status: "failed",
+            ai_model: config.AI_REVIEW_MODEL,
+            ai_feedback: message,
+            ai_raw: {
+                error: message,
+            },
+            ai_rated_at: new Date(),
+        }).where(eq(tasks.id, taskId));
+    }
+
+    const updated = await db.select().from(tasks).where(eq(tasks.id, taskId));
+    return buildTaskAiRatingResponse(taskId, updated[0]);
   })
   // questionnaire: get next questions for a task
   .get("/:id/questionnaire", async ({ params, user, set }) => {
@@ -500,7 +696,7 @@ export const cleanerRoutes = new Elysia({ prefix: "/tasks" })
             title: item.title,
             done: item.done,
             note: item.note || "",
-            photo_required: item.photo_required,
+            photo_required: false,
         }));
 
         if (existingChecklist.length) {

@@ -1,15 +1,46 @@
-# Elysia with Bun runtime
+# Backend Service
 
-## Getting Started
-To get started with this template, simply paste this command into your terminal:
+Elysia API service for the monorepo.
+
+## Environment
+
+Create runtime env file:
+
 ```bash
-bun create elysia ./elysia-example
+cp .env.example .env
 ```
+
+Required:
+- `DATABASE_URL`
+
+Production requirement:
+- `JWT_SECRET` must be a strong secret (startup validates this when `NODE_ENV=production`).
 
 ## Development
-To start the development server run:
+
+From repository root:
+
 ```bash
-bun run dev
+bun run infra:up
+bun run --cwd backend dev
 ```
 
-Open http://localhost:3000/ with your browser to see the result.
+API health check:
+
+```bash
+curl http://localhost:3000/
+```
+
+## Build And Run
+
+```bash
+bun run --cwd backend build
+bun run --cwd backend dist/index.js
+```
+
+## Migrations
+
+```bash
+bun run --cwd backend generate
+bun run --cwd backend migrate
+```

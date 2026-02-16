@@ -16,7 +16,7 @@
 		admin: 'admin-users',
 		supervisor: 'supervisor-inspections',
 		cleaner: 'cleaner-tasks',
-		client: 'client-feedback'
+		client: 'client-requests'
 	};
 
 	onMount(() => {

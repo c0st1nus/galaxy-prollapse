@@ -1,60 +1,83 @@
-# Cleaning App (School Hackathon)
+# Galaxy Prollapse Monorepo
 
-This project is a monorepo containing a web frontend (SvelteKit) and a backend (ElysiaJS), all managed with [Bun](https://bun.sh/).
+Monorepo with:
+- `backend/`: Elysia API + Drizzle migrations
+- `web/`: SvelteKit frontend + Capacitor projects (Android/iOS) kept in repo
 
-## Project Structure
+## Deployment Strategy
 
-- **root**: Contains scripts to run both frontend and backend concurrently.
-- **web**: SvelteKit application using Vite and TailwindCSS.
-- **backend**: ElysiaJS API server.
+Only two modes are supported:
+- Local development
+- AWS production build/deploy
+
+`deploy:aws` never triggers Capacitor Android/iOS commands.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) runtime installed.
-
-## Getting Started
-
-### Installation
-
-Install dependencies for the root, backend, and frontend concurrently:
+- Bun
+- Docker + Docker Compose
 
 ```bash
-bun run install:all
+bun --version
+docker --version
+docker compose version
 ```
 
-Or manually:
+## Environment Files
+
+- `.env` (root): local infra values and frontend build vars
+- `backend/.env`: backend runtime values
+
+Bootstrap from templates:
 
 ```bash
-bun install
-cd backend && bun install
-cd ../web && bun install
+bun run setup
 ```
 
-### Running the Application
-
-Start both the backend and frontend development servers concurrently:
+## Local Development
 
 ```bash
+bun run infra:up
 bun run dev
 ```
 
-- **Frontend**: `http://localhost:5173` (default Vite port)
-- **Backend API**: `http://localhost:3000` (default Elysia port)
+Default endpoints:
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:3000`
+- MinIO API: `http://localhost:9000`
+- MinIO Console: `http://localhost:9001`
 
-### Quick Frontend Testing Mode
-
-Run a separate quick-testing frontend mode (with backend) that enables a dev-only UI route:
+Stop/reset infra:
 
 ```bash
-bun run dev:quick
+bun run infra:down
+bun run infra:reset
 ```
 
-- **Dev-only frontend lab**: `http://localhost:5173/dev`
-- This route is disabled in normal `bun run dev` mode and in production builds.
+## AWS Production
 
-## Scripts
+```bash
+bun run deploy:aws
+```
 
-- `bun run dev`: Runs both frontend and backend in development mode.
-- `bun run dev:quick`: Runs backend + frontend quick-testing mode (`/dev` enabled).
-- `bun run build`: Builds both frontend and backend for production.
-- `bun run start`: Starts the production build for both.
+This runs:
+- `bun run --cwd backend build`
+- `bun run --cwd web build`
+
+It does not run any `android:*`, `ios:*`, or `cap:*` scripts.
+
+## Capacitor Note
+
+Capacitor projects remain versioned in GitHub for mobile maintenance, but are not part of production deployment.
+If mobile native sync/build is needed, run commands directly from `web/package.json`.
+
+## Key Scripts
+
+- `bun run setup`
+- `bun run infra:up`
+- `bun run infra:down`
+- `bun run infra:reset`
+- `bun run dev`
+- `bun run deploy:aws`
+
+See `DEPLOYMENT.md` for full env and rollout details.

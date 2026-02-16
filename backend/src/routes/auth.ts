@@ -2,7 +2,7 @@ import {Elysia, t} from "elysia";
 import {jwt} from "@elysiajs/jwt";
 import {db} from "../database";
 import {companies, users} from "../database/schema";
-import {eq, ilike} from "drizzle-orm";
+import {asc, eq} from "drizzle-orm";
 import {config} from "../utils/config";
 import {normalizeUserRole} from "../utils/roles";
 
@@ -83,12 +83,14 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         return { message: "User role is invalid. Contact your administrator." };
       }
 
-      const company = await db.select().from(companies).where(eq(companies.id, user.company_id));
+      const company = user.company_id === null
+        ? null
+        : (await db.select().from(companies).where(eq(companies.id, user.company_id)))[0] ?? null;
 
       const token = await jwt.sign({
           id: String(user.id),
         role: normalizedRole,
-          company_id: String(user.company_id)
+          company_id: user.company_id
       });
 
       return {
@@ -99,7 +101,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
             role: normalizedRole,
             company_id: user.company_id
         },
-        company: company[0]
+        company
       };
     },
     {
@@ -109,25 +111,17 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       }),
     }
   )
+  .get("/companies", async () => {
+      return db.select({
+          id: companies.id,
+          name: companies.name,
+      })
+          .from(companies)
+          .orderBy(asc(companies.name), asc(companies.id));
+  })
   .post(
     "/register-client",
     async ({ body, jwt, set }) => {
-      const companyName = body.companyName.trim();
-      if (!companyName) {
-        set.status = 400;
-        return { message: "Company name is required" };
-      }
-
-      const matchedCompanies = await db.select().from(companies).where(ilike(companies.name, companyName));
-      if (!matchedCompanies.length) {
-        set.status = 404;
-        return { message: "Company not found. Please check the company name with your administrator." };
-      }
-      if (matchedCompanies.length > 1) {
-        set.status = 409;
-        return { message: "Multiple companies matched this name. Contact your administrator." };
-      }
-
       const hashedPassword = await Bun.password.hash(body.password);
       const fullName = `${body.firstName.trim()} ${body.lastName.trim()}`.trim();
       if (!fullName) {
@@ -137,7 +131,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
 
       try {
         const newUser = await db.insert(users).values({
-          company_id: matchedCompanies[0].id,
+          company_id: null,
           name: fullName,
           role: "client",
           email: body.email.trim(),
@@ -147,7 +141,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         const token = await jwt.sign({
           id: String(newUser[0].id),
           role: newUser[0].role,
-          company_id: String(newUser[0].company_id)
+          company_id: newUser[0].company_id
         });
 
         return {
@@ -158,7 +152,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
             role: newUser[0].role,
             company_id: newUser[0].company_id
           },
-          company: matchedCompanies[0]
+          company: null
         };
       } catch (err: any) {
         if (err?.code === "23505") {
@@ -170,7 +164,6 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     },
     {
       body: t.Object({
-        companyName: t.String(),
         firstName: t.String(),
         lastName: t.String(),
         phone: t.Optional(t.String()),

@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Geolocation } from '@capacitor/geolocation';
 
 export type DeviceCoordinates = {
@@ -7,8 +8,12 @@ export type DeviceCoordinates = {
 	accuracy?: number;
 };
 
+export function isNativeRuntime() {
+	return Capacitor.isNativePlatform();
+}
+
 export async function readCurrentPosition(timeoutMs = 10_000): Promise<DeviceCoordinates> {
-	if (Capacitor.isNativePlatform()) {
+	if (isNativeRuntime()) {
 		const perm = await Geolocation.checkPermissions();
 		if (perm.location !== 'granted' && perm.coarseLocation !== 'granted') {
 			const req = await Geolocation.requestPermissions();
@@ -49,6 +54,52 @@ export async function readCurrentPosition(timeoutMs = 10_000): Promise<DeviceCoo
 			}
 		);
 	});
+}
+
+function permissionGranted(value: string | undefined) {
+	return value === 'granted' || value === 'limited';
+}
+
+export async function capturePhotoWithNativeCamera(
+	fileNamePrefix: string,
+	quality = 85
+): Promise<File> {
+	if (!isNativeRuntime() || !Capacitor.isPluginAvailable('Camera')) {
+		throw new Error('native camera is not available on this device');
+	}
+
+	const currentPermissions = await Camera.checkPermissions();
+	const hasCamera = permissionGranted(currentPermissions.camera);
+
+	if (!hasCamera) {
+		const requestedPermissions = await Camera.requestPermissions({
+			permissions: ['camera']
+		});
+		const grantedCamera = permissionGranted(requestedPermissions.camera);
+		if (!grantedCamera) {
+			throw new Error('camera permission denied');
+		}
+	}
+
+	try {
+		const captured = await Camera.getPhoto({
+			quality,
+			source: CameraSource.Camera,
+			resultType: CameraResultType.DataUrl,
+			correctOrientation: true,
+			saveToGallery: false
+		});
+		if (!captured.dataUrl) {
+			throw new Error('camera did not return image data');
+		}
+		return dataUrlToFile(captured.dataUrl, fileNamePrefix);
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err || '');
+		if (/cancel/i.test(message)) {
+			throw new Error('camera capture canceled');
+		}
+		throw err;
+	}
 }
 
 export function fileToDataUrl(file: File): Promise<string> {

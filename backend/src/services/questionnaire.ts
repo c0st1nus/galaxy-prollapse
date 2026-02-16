@@ -246,6 +246,60 @@ const corridorQuestions: Question[] = [
     },
 ];
 
+const kitchenQuestions: Question[] = [
+    {
+        id: "food_residue",
+        text: "How much food residue is present on worktops and splash areas?",
+        type: "single",
+        options: [
+            { value: "none", label: "No visible residue" },
+            { value: "light", label: "Light residue in a few spots" },
+            { value: "moderate", label: "Moderate residue across prep areas" },
+            { value: "heavy", label: "Heavy buildup / sticky residue" },
+        ],
+    },
+    {
+        id: "grease_buildup",
+        text: "What is the grease buildup level (hood, tiles, equipment exterior)?",
+        type: "single",
+        options: [
+            { value: "none", label: "No visible grease" },
+            { value: "light", label: "Light grease film" },
+            { value: "moderate", label: "Noticeable grease deposits" },
+            { value: "heavy", label: "Heavy grease buildup" },
+        ],
+    },
+    {
+        id: "cold_storage_hygiene",
+        text: "Are refrigerators and cold storage areas clean and odor-free?",
+        type: "boolean",
+    },
+];
+
+const storageQuestions: Question[] = [
+    {
+        id: "shelf_dust",
+        text: "How much dust is present on shelves and stored items?",
+        type: "single",
+        options: [
+            { value: "none", label: "No visible dust" },
+            { value: "light", label: "Light dust on upper shelves" },
+            { value: "moderate", label: "Moderate dust across shelves" },
+            { value: "heavy", label: "Heavy dust / cobwebs present" },
+        ],
+    },
+    {
+        id: "spill_hazards",
+        text: "Are there spills, leaks, or slip hazards in storage areas?",
+        type: "boolean",
+    },
+    {
+        id: "aisle_clearance",
+        text: "Are aisles clear for safe access and cleaning?",
+        type: "boolean",
+    },
+];
+
 // ── Public API ─────────────────────────────────────────────────────────
 
 export function getQuestionsForRoom(roomType: string): Question[] {
@@ -255,10 +309,21 @@ export function getQuestionsForRoom(roomType: string): Question[] {
             questions.push(...bathroomQuestions);
             break;
         case "office":
+        case "conference_room":
+        case "classroom":
             questions.push(...officeQuestions);
             break;
         case "corridor":
+        case "lobby":
+        case "stairwell":
+        case "elevator":
             questions.push(...corridorQuestions);
+            break;
+        case "kitchen":
+            questions.push(...kitchenQuestions);
+            break;
+        case "storage":
+            questions.push(...storageQuestions);
             break;
     }
     return questions;
@@ -302,6 +367,9 @@ const conditionScores: Record<string, Record<string, number>> = {
     grout_condition: { clean: 0, discolored: 1, moldy: 3 },
     carpet_condition: { clean: 0, light_stains: 1, stained: 2, heavily_soiled: 4 },
     workstation_clutter: { clear: 0, moderate: 1, heavy: 2 },
+    food_residue: { none: 0, light: 1, moderate: 2, heavy: 4 },
+    grease_buildup: { none: 0, light: 1, moderate: 2, heavy: 4 },
+    shelf_dust: { none: 0, light: 1, moderate: 2, heavy: 4 },
 };
 
 export function determineAppaLevel(answers: QuestionnaireAnswer[]): number {
@@ -365,14 +433,15 @@ export function generateChecklistFromAnswers(
     const items: ChecklistItem[] = [];
     let idx = 0;
 
-    const add = (title: string, photoRequired = false, minLevel = 5) => {
+    const add = (title: string, _photoRequired = false, minLevel = 5) => {
         if (level >= minLevel || minLevel === 0) {
             idx++;
             items.push({
                 id: `appa_${idx}`,
                 title,
                 done: false,
-                photo_required: photoRequired,
+                // checklist photos are optional now; task-level photos are still enforced separately
+                photo_required: false,
                 appa_level: minLevel || level,
             });
         }
@@ -445,6 +514,8 @@ export function generateChecklistFromAnswers(
             break;
 
         case "office":
+        case "conference_room":
+        case "classroom":
             add("Wipe down all desk surfaces", false, 2);
             add("Clean phone handsets and shared equipment", false, 2);
             add("Dust monitor screens carefully", false, 3);
@@ -465,10 +536,19 @@ export function generateChecklistFromAnswers(
                     add("Schedule carpet deep extraction", true, 0);
                 }
             }
+            if (roomType === "conference_room") {
+                add("Disinfect shared conference table surfaces", true, 0);
+            }
+            if (roomType === "classroom") {
+                add("Disinfect student desks and shared touchpoints", true, 0);
+            }
             break;
 
         case "corridor":
-            add("Mop full corridor length", true, 0);
+        case "lobby":
+        case "stairwell":
+        case "elevator":
+            add("Mop full traffic path length", true, 0);
             add("Wipe handrails and wall-mounted fixtures", false, 2);
             add("Clean wall scuff marks and fingerprints", false, 3);
             add("Polish hard floors / burnish", true, 4);
@@ -480,11 +560,53 @@ export function generateChecklistFromAnswers(
                 }
                 const floorType = answerMap.get("floor_type");
                 if (floorType === "carpet" || floorType === "mixed") {
-                    add("Vacuum carpet sections of corridor", false, 0);
+                    add("Vacuum carpet sections in traffic areas", false, 0);
                 }
                 const signage = answerMap.get("signage_available");
                 if (signage === "no" && traffic === "high") {
                     add("Request wet floor signage from supply room", false, 0);
+                }
+            }
+            if (roomType === "elevator") {
+                add("Disinfect elevator buttons and interior handrails", true, 0);
+            }
+            break;
+
+        case "kitchen":
+            add("Sanitize all food-prep counters", true, 0);
+            add("Degrease splashbacks and equipment exterior", true, 2);
+            add("Mop kitchen floor with degreasing solution", true, 2);
+            {
+                const residue = answerMap.get("food_residue");
+                if (residue === "moderate" || residue === "heavy") {
+                    add("Scrub stubborn food residue from prep surfaces", true, 0);
+                }
+                const grease = answerMap.get("grease_buildup");
+                if (grease === "moderate" || grease === "heavy") {
+                    add("Deep-degrease hood filters and nearby surfaces", true, 0);
+                }
+                const coldStorage = answerMap.get("cold_storage_hygiene");
+                if (coldStorage === "no") {
+                    add("Clean and sanitize refrigerator handles and seals", true, 0);
+                }
+            }
+            break;
+
+        case "storage":
+            add("Dust accessible shelves and stored-item surfaces", false, 0);
+            add("Sweep and mop storage-room floor", true, 0);
+            {
+                const shelfDust = answerMap.get("shelf_dust");
+                if (shelfDust === "moderate" || shelfDust === "heavy") {
+                    add("Deep-dust upper shelves and corners", true, 0);
+                }
+                const spills = answerMap.get("spill_hazards");
+                if (spills === "yes") {
+                    add("Contain and clean spill hazards, then mark area safe", true, 0);
+                }
+                const aisles = answerMap.get("aisle_clearance");
+                if (aisles === "no") {
+                    add("Report blocked aisles for safety correction", false, 0);
                 }
             }
             break;
