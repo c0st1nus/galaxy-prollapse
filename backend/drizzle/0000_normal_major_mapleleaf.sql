@@ -1,20 +1,59 @@
-ALTER TABLE "checklists" DROP CONSTRAINT "checklists_task_id_tasks_id_fk";
+CREATE TABLE "checklists" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"task_id" integer NOT NULL,
+	"inspector_id" integer NOT NULL,
+	"score" integer NOT NULL,
+	"comment" text
+);
 --> statement-breakpoint
-ALTER TABLE "checklists" DROP CONSTRAINT "checklists_inspector_id_users_id_fk";
+CREATE TABLE "companies" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"created_at" timestamp DEFAULT now()
+);
 --> statement-breakpoint
-ALTER TABLE "feedback" DROP CONSTRAINT "feedback_object_id_objects_id_fk";
+CREATE TABLE "feedback" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"object_id" integer NOT NULL,
+	"client_id" integer NOT NULL,
+	"rating" integer NOT NULL,
+	"text" text
+);
 --> statement-breakpoint
-ALTER TABLE "feedback" DROP CONSTRAINT "feedback_client_id_users_id_fk";
+CREATE TABLE "objects" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"company_id" integer NOT NULL,
+	"address" text NOT NULL,
+	"description" text
+);
 --> statement-breakpoint
-ALTER TABLE "objects" DROP CONSTRAINT "objects_company_id_companies_id_fk";
+CREATE TABLE "rooms" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"object_id" integer NOT NULL,
+	"type" text NOT NULL,
+	"area_sqm" integer NOT NULL
+);
 --> statement-breakpoint
-ALTER TABLE "rooms" DROP CONSTRAINT "rooms_object_id_objects_id_fk";
+CREATE TABLE "tasks" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"room_id" integer NOT NULL,
+	"cleaner_id" integer NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"photo_before" text,
+	"photo_after" text,
+	"timestamp_start" timestamp,
+	"timestamp_end" timestamp
+);
 --> statement-breakpoint
-ALTER TABLE "tasks" DROP CONSTRAINT "tasks_room_id_rooms_id_fk";
---> statement-breakpoint
-ALTER TABLE "tasks" DROP CONSTRAINT "tasks_cleaner_id_users_id_fk";
---> statement-breakpoint
-ALTER TABLE "users" DROP CONSTRAINT "users_company_id_companies_id_fk";
+CREATE TABLE "users" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"company_id" integer NOT NULL,
+	"name" text NOT NULL,
+	"role" text NOT NULL,
+	"email" text NOT NULL,
+	"password" text NOT NULL,
+	CONSTRAINT "users_email_unique" UNIQUE("email")
+);
 --> statement-breakpoint
 ALTER TABLE "checklists" ADD CONSTRAINT "checklists_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "checklists" ADD CONSTRAINT "checklists_inspector_id_users_id_fk" FOREIGN KEY ("inspector_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

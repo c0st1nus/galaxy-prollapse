@@ -9983,7 +9983,7 @@ var require_buffer_list = __commonJS((exports, module) => {
       }
     }, {
       key: "concat",
-      value: function concat(n) {
+      value: function concat3(n) {
         if (this.length === 0)
           return Buffer2.alloc(0);
         var ret = Buffer2.allocUnsafe(n >>> 0);
@@ -10458,7 +10458,7 @@ var require__stream_writable = __commonJS((exports, module) => {
       }
     });
   } else {
-    realHasInstance = function realHasInstance(object) {
+    realHasInstance = function realHasInstance2(object) {
       return object instanceof this;
     };
   }
@@ -11256,28 +11256,28 @@ var require_end_of_stream = __commonJS((exports, module) => {
     callback = once2(callback || noop3);
     var readable = opts.readable || opts.readable !== false && stream.readable;
     var writable = opts.writable || opts.writable !== false && stream.writable;
-    var onlegacyfinish = function onlegacyfinish() {
+    var onlegacyfinish = function onlegacyfinish2() {
       if (!stream.writable)
         onfinish();
     };
     var writableEnded = stream._writableState && stream._writableState.finished;
-    var onfinish = function onfinish() {
+    var onfinish = function onfinish2() {
       writable = false;
       writableEnded = true;
       if (!readable)
         callback.call(stream);
     };
     var readableEnded = stream._readableState && stream._readableState.endEmitted;
-    var onend = function onend() {
+    var onend = function onend2() {
       readable = false;
       readableEnded = true;
       if (!writable)
         callback.call(stream);
     };
-    var onerror = function onerror(err) {
+    var onerror = function onerror2(err) {
       callback.call(stream, err);
     };
-    var onclose = function onclose() {
+    var onclose = function onclose2() {
       var err;
       if (readable && !readableEnded) {
         if (!stream._readableState || !stream._readableState.ended)
@@ -11290,7 +11290,7 @@ var require_end_of_stream = __commonJS((exports, module) => {
         return callback.call(stream, err);
       }
     };
-    var onrequest = function onrequest() {
+    var onrequest = function onrequest2() {
       stream.req.on("finish", onfinish);
     };
     if (isRequest(stream)) {
@@ -11447,7 +11447,7 @@ var require_async_iterator = __commonJS((exports, module) => {
       });
     });
   }), _Object$setPrototypeO), AsyncIteratorPrototype);
-  var createReadableStreamAsyncIterator = function createReadableStreamAsyncIterator(stream) {
+  var createReadableStreamAsyncIterator = function createReadableStreamAsyncIterator2(stream) {
     var _Object$create;
     var iterator = Object.create(ReadableStreamAsyncIteratorPrototype, (_Object$create = {}, _defineProperty(_Object$create, kStream, {
       value: stream,
@@ -11636,7 +11636,7 @@ var require__stream_readable = __commonJS((exports, module) => {
   var Duplex;
   Readable2.ReadableState = ReadableState;
   var EE = __require("events").EventEmitter;
-  var EElistenerCount = function EElistenerCount(emitter, type) {
+  var EElistenerCount = function EElistenerCount2(emitter, type) {
     return emitter.listeners(type).length;
   };
   var Stream3 = __require("stream");
@@ -11653,7 +11653,7 @@ var require__stream_readable = __commonJS((exports, module) => {
   if (debugUtil && debugUtil.debuglog) {
     debug2 = debugUtil.debuglog("stream");
   } else {
-    debug2 = function debug() {};
+    debug2 = function debug3() {};
   }
   var BufferList = require_buffer_list();
   var destroyImpl = require_destroy();
@@ -13405,7 +13405,7 @@ var require_lodash = __commonJS((exports, module) => {
     function unicodeWords(string) {
       return string.match(reUnicodeWord) || [];
     }
-    var runInContext = function runInContext(context) {
+    var runInContext = function runInContext2(context) {
       context = context == null ? root : _2.defaults(root.Object(), context, _2.pick(root, contextProps));
       var { Array: Array3, Date: Date3, Error: Error2, Function: Function4, Math: Math2, Object: Object3, RegExp: RegExp3, String: String4, TypeError: TypeError2 } = context;
       var arrayProto = Array3.prototype, funcProto = Function4.prototype, objectProto = Object3.prototype;
@@ -17938,7 +17938,7 @@ __p += '`;
       lodash.replace = replace;
       lodash.result = result;
       lodash.round = round;
-      lodash.runInContext = runInContext;
+      lodash.runInContext = runInContext2;
       lodash.sample = sample;
       lodash.size = size2;
       lodash.snakeCase = snakeCase;
@@ -29247,17 +29247,6 @@ var require_db = __commonJS((exports, module) => {
   };
 });
 
-// node_modules/mime-db/index.js
-var require_mime_db = __commonJS((exports, module) => {
-  /*!
-   * mime-db
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2015-2022 Douglas Christopher Wilson
-   * MIT Licensed
-   */
-  module.exports = require_db();
-});
-
 // node_modules/eventemitter3/index.js
 var require_eventemitter3 = __commonJS((exports, module) => {
   var has = Object.prototype.hasOwnProperty;
@@ -29386,7 +29375,7 @@ var require_eventemitter3 = __commonJS((exports, module) => {
   EventEmitter.prototype.on = function on(event, fn, context) {
     return addListener(this, event, fn, context, false);
   };
-  EventEmitter.prototype.once = function once(event, fn, context) {
+  EventEmitter.prototype.once = function once2(event, fn, context) {
     return addListener(this, event, fn, context, true);
   };
   EventEmitter.prototype.removeListener = function removeListener(event, fn, context, once2) {
@@ -55781,7 +55770,7 @@ import * as stream2 from "stream";
  * Copyright(c) 2015 Douglas Christopher Wilson
  * MIT Licensed
  */
-var db2 = require_mime_db();
+var db2 = require_db();
 var extname = __require("path").extname;
 var $extensions = Object.create(null);
 var $lookup = lookup;
@@ -61117,10 +61106,11 @@ async function migrate(db3, config2) {
 }
 
 // src/database/migrate.ts
+import path2 from "path";
 async function runMigrations() {
   console.log("Running migrations...");
   try {
-    await migrate(db, { migrationsFolder: "./drizzle" });
+    await migrate(db, { migrationsFolder: path2.join(process.cwd(), "drizzle") });
     console.log("Migrations applied successfully!");
   } catch (error) {
     console.error("Migration failed:", error);
