@@ -2,32 +2,28 @@ import {migrate} from "drizzle-orm/postgres-js/migrator";
 import {db} from "./index";
 import fs from "fs";
 import path from "path";
+import {config} from "../utils/config";
 
 function resolveMigrationsFolder() {
   const candidates = [
-    // common root execution (cwd = repo root)
-    path.resolve(process.cwd(), "backend/drizzle"),
-    // common backend execution (cwd = backend)
+    config.MIGRATIONS_DIR || "",
     path.resolve(process.cwd(), "drizzle"),
-    // source runtime
     path.resolve(import.meta.dir, "../../drizzle"),
-    // bundled runtime fallback
-    path.resolve(import.meta.dir, "../../../drizzle"),
-  ];
+  ].filter(Boolean);
 
   for (const candidate of candidates) {
-    if (fs.existsSync(path.resolve(candidate, "meta/_journal.json"))) {
+    if (fs.existsSync(candidate)) {
       return candidate;
     }
   }
 
-  // keep first candidate as deterministic fallback for error messages downstream.
-  return candidates[0];
+  throw new Error(
+    `Unable to locate drizzle migrations directory. Checked: ${candidates.join(", ")}`,
+  );
 }
 
-const migrationsFolder = resolveMigrationsFolder();
-
 export async function runMigrations() {
+  const migrationsFolder = resolveMigrationsFolder();
   console.log("Running migrations...");
   try {
     await migrate(db, {migrationsFolder});
