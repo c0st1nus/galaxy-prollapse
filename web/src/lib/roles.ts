@@ -18,9 +18,6 @@ export function normalizeUserRole(role: unknown): UserRole | null {
 	return roleAliases[role.trim().toLowerCase()] ?? null;
 }
 
-export function normalizeUserRoleOrDefault(
-	role: unknown,
-	fallback: UserRole = 'client'
-): UserRole {
+export function normalizeUserRoleOrDefault(role: unknown, fallback: UserRole = 'client'): UserRole {
 	return normalizeUserRole(role) ?? fallback;
 }

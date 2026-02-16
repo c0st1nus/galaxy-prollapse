@@ -1,11 +1,12 @@
 import {Elysia, t} from "elysia";
 import {db} from "../database";
-import {checklistTemplates, checklists, companies, geofenceViolations, objects, rooms, syncOperations, tasks, users} from "../database/schema";
-import {and, eq, sql} from "drizzle-orm";
+import {checklistTemplates, checklists, clientServiceRequests, companies, geofenceViolations, objects, rooms, syncOperations, taskEvents, tasks, users} from "../database/schema";
+import {and, desc, eq, sql} from "drizzle-orm";
 import {jwt} from "@elysiajs/jwt";
 import {config} from "../utils/config";
 import type {JwtPayload} from "../utils/types";
 import {isCleanerRole, normalizeUserRole} from "../utils/roles";
+import {isPredefinedTaskEventType, ROOM_TYPE_OPTIONS, TASK_EVENT_TYPE_OPTIONS} from "../utils/catalogs";
 
 const roleEnum = t.Union([
     t.Literal("admin"),
@@ -19,6 +20,41 @@ const roleEnum = t.Union([
     t.Literal("client"),
     t.Literal("clients"),
 ]);
+
+type RequestedTask = {
+    room_type: string;
+    area_sqm: number;
+    note?: string;
+};
+
+function isSupervisorRole(rawRole: unknown): boolean {
+    return normalizeUserRole(rawRole) === "supervisor";
+}
+
+function toNumberOrNull(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    const next = Number(value);
+    return Number.isFinite(next) ? next : null;
+}
+
+function normalizeRequestedTasks(value: unknown): RequestedTask[] {
+    if (!Array.isArray(value)) return [];
+    const normalized: RequestedTask[] = [];
+    for (const raw of value) {
+        if (!raw || typeof raw !== "object") continue;
+        const row = raw as Record<string, unknown>;
+        const roomType = typeof row.room_type === "string" ? row.room_type.trim() : "";
+        const area = Number(row.area_sqm);
+        const note = typeof row.note === "string" ? row.note.trim() : "";
+        if (!roomType || !Number.isInteger(area) || area <= 0) continue;
+        normalized.push({
+            room_type: roomType,
+            area_sqm: area,
+            note: note || undefined,
+        });
+    }
+    return normalized;
+}
 
 export const adminRoutes = new Elysia({ prefix: "/admin" })
   .use(
@@ -55,6 +91,18 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
     }
       return {user};
   })
+  .get("/catalogs/room-types", () => {
+      return {
+          options: ROOM_TYPE_OPTIONS,
+          allow_custom: true,
+      };
+  })
+  .get("/catalogs/task-event-types", () => {
+      return {
+          options: TASK_EVENT_TYPE_OPTIONS,
+          allow_custom: true,
+      };
+  })
   .get("/analytics/efficiency", async ({ user }) => {
       // stats: sqm cleaned by each employee
     const result = await db.select({
@@ -78,6 +126,9 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
           objectId: objects.id,
           address: objects.address,
           description: objects.description,
+          latitude: objects.latitude,
+          longitude: objects.longitude,
+          geofence_radius_meters: objects.geofence_radius_meters,
           totalTasks: sql<number>`count(
           ${tasks.id}
           )`.mapWith(Number),
@@ -110,9 +161,20 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
           .leftJoin(rooms, eq(rooms.object_id, objects.id))
           .leftJoin(tasks, eq(tasks.room_id, rooms.id))
           .where(eq(objects.company_id, user.company_id))
-          .groupBy(objects.id, objects.address, objects.description);
+          .groupBy(
+              objects.id,
+              objects.address,
+              objects.description,
+              objects.latitude,
+              objects.longitude,
+              objects.geofence_radius_meters
+          );
 
-      return result;
+      return result.map((row) => ({
+          ...row,
+          latitude: row.latitude !== null ? Number(row.latitude) : null,
+          longitude: row.longitude !== null ? Number(row.longitude) : null,
+      }));
   })
   // list company users (for dropdowns)
   .get("/users", async ({ user }) => {
@@ -165,6 +227,174 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
         .where(eq(objects.company_id, user.company_id))
         .orderBy(tasks.id);
     return result;
+  })
+  .get("/client-requests", async ({ user }) => {
+      const result = await db.select({
+          request: clientServiceRequests,
+          client: {
+              id: users.id,
+              name: users.name,
+              email: users.email,
+          },
+          createdObject: {
+              id: objects.id,
+              address: objects.address,
+          },
+      })
+          .from(clientServiceRequests)
+          .innerJoin(users, eq(clientServiceRequests.client_id, users.id))
+          .leftJoin(objects, eq(clientServiceRequests.created_object_id, objects.id))
+          .where(eq(clientServiceRequests.company_id, user.company_id))
+          .orderBy(desc(clientServiceRequests.created_at), desc(clientServiceRequests.id));
+
+      return result.map((row) => ({
+          ...row.request,
+          requested_tasks: normalizeRequestedTasks(row.request.requested_tasks),
+          latitude: toNumberOrNull(row.request.latitude),
+          longitude: toNumberOrNull(row.request.longitude),
+          location_accuracy_meters: toNumberOrNull(row.request.location_accuracy_meters),
+          client: row.client,
+          created_object: row.createdObject && row.createdObject.id ? row.createdObject : null,
+      }));
+  })
+  .post("/client-requests/:id/accept", async ({ params, body, user, set }) => {
+      const requestId = parseInt(params.id);
+      if (!Number.isInteger(requestId)) {
+          set.status = 400;
+          return {message: "Invalid request id"};
+      }
+
+      const existingRows = await db.select().from(clientServiceRequests).where(and(
+          eq(clientServiceRequests.id, requestId),
+          eq(clientServiceRequests.company_id, user.company_id),
+      )).limit(1);
+      if (!existingRows.length) {
+          set.status = 404;
+          return {message: "Client request not found"};
+      }
+      const existing = existingRows[0];
+      if (existing.status !== "pending") {
+          set.status = 400;
+          return {message: "Client request has already been processed"};
+      }
+
+      const requestedTasks = normalizeRequestedTasks(existing.requested_tasks);
+      if (!requestedTasks.length) {
+          set.status = 400;
+          return {message: "Client request has no valid tasks"};
+      }
+
+      const companyAssignees = await db.select({
+          id: users.id,
+          role: users.role,
+      }).from(users).where(eq(users.company_id, user.company_id));
+
+      const supervisors = companyAssignees
+          .filter((row) => isSupervisorRole(row.role))
+          .sort((a, b) => a.id - b.id);
+      const cleaners = companyAssignees
+          .filter((row) => isCleanerRole(row.role))
+          .sort((a, b) => a.id - b.id);
+
+      if (!supervisors.length) {
+          set.status = 400;
+          return {message: "No supervisor is available for auto-assignment"};
+      }
+      if (!cleaners.length) {
+          set.status = 400;
+          return {message: "No cleaner is available for auto-assignment"};
+      }
+
+      const autoSupervisorId = supervisors[0].id;
+      const autoCleanerId = cleaners[0].id;
+
+      try {
+          const txResult = await db.transaction(async (tx) => {
+              const createdObjectRows = await tx.insert(objects).values({
+                  company_id: user.company_id,
+                  address: existing.object_address,
+                  description: existing.object_description,
+                  latitude: existing.latitude,
+                  longitude: existing.longitude,
+                  geofence_radius_meters: existing.geofence_radius_meters,
+                  cleaning_standard: existing.recommended_cleaning_standard || "appa_3",
+              }).returning();
+              const createdObject = createdObjectRows[0];
+
+              const createdRooms = await tx.insert(rooms).values(
+                  requestedTasks.map((task) => ({
+                      object_id: createdObject.id,
+                      type: task.room_type,
+                      area_sqm: task.area_sqm,
+                  }))
+              ).returning({
+                  id: rooms.id,
+              });
+
+              const createdTasks = createdRooms.length
+                  ? await tx.insert(tasks).values(
+                      createdRooms.map((room) => ({
+                          room_id: room.id,
+                          cleaner_id: autoCleanerId,
+                          status: "pending" as const,
+                      }))
+                  ).returning({
+                      id: tasks.id,
+                  })
+                  : [];
+
+              const updatedRows = await tx.update(clientServiceRequests)
+                  .set({
+                      status: "accepted",
+                      decision_note: body.decision_note?.trim() || null,
+                      reviewed_by: user.id,
+                      reviewed_at: new Date(),
+                      assigned_supervisor_id: autoSupervisorId,
+                      assigned_cleaner_id: autoCleanerId,
+                      created_object_id: createdObject.id,
+                  })
+                  .where(and(
+                      eq(clientServiceRequests.id, requestId),
+                      eq(clientServiceRequests.company_id, user.company_id),
+                      eq(clientServiceRequests.status, "pending"),
+                  ))
+                  .returning();
+
+              if (!updatedRows.length) {
+                  throw new Error("request_already_processed");
+              }
+
+              return {
+                  request: updatedRows[0],
+                  createdObject,
+                  createdRoomCount: createdRooms.length,
+                  createdTaskCount: createdTasks.length,
+              };
+          });
+
+          return {
+              request: {
+                  ...txResult.request,
+                  requested_tasks: normalizeRequestedTasks(txResult.request.requested_tasks),
+                  latitude: toNumberOrNull(txResult.request.latitude),
+                  longitude: toNumberOrNull(txResult.request.longitude),
+                  location_accuracy_meters: toNumberOrNull(txResult.request.location_accuracy_meters),
+              },
+              created_object: txResult.createdObject,
+              created_rooms: txResult.createdRoomCount,
+              created_tasks: txResult.createdTaskCount,
+          };
+      } catch (err) {
+          if (err instanceof Error && err.message === "request_already_processed") {
+              set.status = 409;
+              return {message: "Client request has already been processed"};
+          }
+          throw err;
+      }
+  }, {
+      body: t.Object({
+          decision_note: t.Optional(t.String()),
+      }),
   })
   .post("/users", async ({ body, user, set }) => {
       const normalizedRole = normalizeUserRole(body.role);
@@ -330,7 +560,7 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
 
     const newRoom = await db.insert(rooms).values({
         object_id: body.object_id,
-        type: body.type as "office" | "bathroom" | "corridor",
+        type: body.type,
         area_sqm: body.area_sqm
     }).returning();
     
@@ -511,6 +741,72 @@ export const adminRoutes = new Elysia({ prefix: "/admin" })
         const deleted = await db.delete(tasks).where(eq(tasks.id, taskId)).returning();
         return {message: "Task deleted successfully", deletedTaskId: deleted[0]?.id ?? taskId};
     })
+  .get("/tasks/:id/events", async ({ params, user, set }) => {
+      const taskId = parseInt(params.id);
+      const existing = await db.select({
+          task_id: tasks.id,
+      })
+          .from(tasks)
+          .innerJoin(rooms, eq(tasks.room_id, rooms.id))
+          .innerJoin(objects, eq(rooms.object_id, objects.id))
+          .where(and(eq(tasks.id, taskId), eq(objects.company_id, user.company_id)));
+      if (!existing.length) {
+          set.status = 404;
+          return { message: "Task not found" };
+      }
+
+      const rows = await db.select().from(taskEvents)
+          .where(eq(taskEvents.task_id, taskId))
+          .orderBy(taskEvents.event_time, taskEvents.id);
+
+      return rows.map((row) => ({
+          ...row,
+          is_predefined: isPredefinedTaskEventType(row.event_type),
+      }));
+  })
+  .post("/tasks/:id/events", async ({ params, body, user, set }) => {
+      const taskId = parseInt(params.id);
+      const existing = await db.select({
+          task_id: tasks.id,
+      })
+          .from(tasks)
+          .innerJoin(rooms, eq(tasks.room_id, rooms.id))
+          .innerJoin(objects, eq(rooms.object_id, objects.id))
+          .where(and(eq(tasks.id, taskId), eq(objects.company_id, user.company_id)));
+      if (!existing.length) {
+          set.status = 404;
+          return { message: "Task not found" };
+      }
+
+      const eventType = body.event_type.trim();
+      if (!eventType) {
+          set.status = 400;
+          return { message: "event_type is required" };
+      }
+
+      const metadata: Record<string, unknown> = { ...(body.metadata || {}) };
+      if (body.note !== undefined && body.note.trim()) {
+          metadata.note = body.note.trim();
+      }
+
+      const inserted = await db.insert(taskEvents).values({
+          task_id: taskId,
+          actor_id: user.id,
+          event_type: eventType,
+          metadata: Object.keys(metadata).length ? metadata : null,
+      }).returning();
+
+      return {
+          ...inserted[0],
+          is_predefined: isPredefinedTaskEventType(inserted[0].event_type),
+      };
+  }, {
+      body: t.Object({
+          event_type: t.String(),
+          note: t.Optional(t.String()),
+          metadata: t.Optional(t.Record(t.String(), t.Unknown())),
+      }),
+  })
   .get("/company", async ({ user }) => {
       const company = await db.select().from(companies).where(eq(companies.id, user.company_id));
     if (!company.length) {

@@ -14,7 +14,6 @@
 	let error = $state('');
 
 	let form = $state({
-		companyName: '',
 		firstName: '',
 		lastName: '',
 		phone: '',
@@ -29,7 +28,6 @@
 		error = '';
 		try {
 			const result = await registerClient({
-				companyName: form.companyName.trim(),
 				firstName: form.firstName.trim(),
 				lastName: form.lastName.trim(),
 				phone: form.phone.trim() || undefined,
@@ -87,23 +85,6 @@
 		</div>
 
 		<form class="grid gap-4 p-3.5 sm:p-6" onsubmit={submitRegister}>
-			<label class={ui.label}>
-				<span class="label-title">
-					<AppIcon name="building" class="h-4 w-4" />{m.auth_company_name_label()}
-				</span>
-				<div class={ui.inputWithIcon}>
-					<AppIcon name="building" class={ui.inputIcon} />
-					<input
-						required
-						class={ui.inputPadded}
-						type="text"
-						bind:value={form.companyName}
-						placeholder={m.auth_company_name_placeholder()}
-						autocomplete="organization"
-					/>
-				</div>
-			</label>
-
 			<div class="grid gap-4 sm:grid-cols-2">
 				<label class={ui.label}>
 					<span class="label-title">
@@ -116,7 +97,6 @@
 							class={ui.inputPadded}
 							type="text"
 							bind:value={form.firstName}
-							placeholder={m.register_first_name_placeholder()}
 							autocomplete="given-name"
 						/>
 					</div>
@@ -133,7 +113,6 @@
 							class={ui.inputPadded}
 							type="text"
 							bind:value={form.lastName}
-							placeholder={m.register_last_name_placeholder()}
 							autocomplete="family-name"
 						/>
 					</div>
@@ -150,7 +129,6 @@
 						class={ui.inputPadded}
 						type="tel"
 						bind:value={form.phone}
-						placeholder={m.register_phone_placeholder()}
 						autocomplete="tel"
 					/>
 				</div>
@@ -167,7 +145,6 @@
 						class={ui.inputPadded}
 						type="email"
 						bind:value={form.email}
-						placeholder={m.register_email_placeholder()}
 						autocomplete="email"
 					/>
 				</div>
@@ -185,7 +162,6 @@
 						class={ui.inputPadded}
 						type="password"
 						bind:value={form.password}
-						placeholder={m.register_password_placeholder()}
 						autocomplete="new-password"
 					/>
 				</div>

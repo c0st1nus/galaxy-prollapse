@@ -54,4 +54,5 @@ export const config = {
   MINIO_BUCKET: env("MINIO_BUCKET", "school-hackathon").trim(),
   MINIO_PUBLIC_BASE_URL: env("MINIO_PUBLIC_BASE_URL", "").trim().replace(/\/+$/, ""),
   OPENAI_API_KEY: env("OPENAI_API_KEY", "").trim(),
+  AI_REVIEW_MODEL: env("AI_REVIEW_MODEL", "gpt-5-mini").trim(),
 };

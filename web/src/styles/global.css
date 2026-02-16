@@ -228,6 +228,9 @@ textarea {
 
 .table-shell {
 	margin-top: 1rem;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
 	overflow-x: auto;
 	border: 1px solid var(--border);
 	border-radius: 1rem;

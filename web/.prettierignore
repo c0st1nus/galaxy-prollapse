@@ -7,3 +7,16 @@ bun.lockb
 
 # Miscellaneous
 /static/
+/.svelte-kit/
+/build/
+/dist/
+/node_modules/
+/.vscode/
+/android/app/build/
+/android/app/src/main/assets/
+/android/.gradle/
+/android/.idea/
+/android/capacitor-cordova-android-plugins/build/
+/android/build/
+/ios/
+/src/paraglide/

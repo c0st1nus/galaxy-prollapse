@@ -37,7 +37,12 @@
 	{#if values.length === 0}
 		<p class="mt-3 text-sm text-[var(--text-soft)]">{emptyText}</p>
 	{:else}
-		<svg class="mt-3 h-32 w-full sm:h-36" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
+		<svg
+			class="mt-3 h-32 w-full sm:h-36"
+			viewBox={`0 0 ${width} ${height}`}
+			role="img"
+			aria-label={title}
+		>
 			<polyline
 				{points}
 				fill="none"

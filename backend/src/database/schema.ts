@@ -1,4 +1,4 @@
-import {integer, jsonb, numeric, pgTable, serial, text, timestamp, unique} from "drizzle-orm/pg-core";
+import {boolean, integer, jsonb, numeric, pgTable, serial, text, timestamp, unique} from "drizzle-orm/pg-core";
 import {relations} from "drizzle-orm";
 
 // Companies: id, name, created_at
@@ -11,7 +11,7 @@ export const companies = pgTable("companies", {
 // Users: id, company_id, name, role (admin, supervisor, cleaner, client), email, password.
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  company_id: integer("company_id").references(() => companies.id, { onDelete: 'cascade' }).notNull(),
+  company_id: integer("company_id").references(() => companies.id, { onDelete: 'cascade' }),
   name: text("name").notNull(),
   role: text("role", { enum: ["admin", "supervisor", "cleaner", "client"] }).notNull(),
   email: text("email").notNull().unique(),
@@ -30,11 +30,11 @@ export const objects = pgTable("objects", {
   cleaning_standard: text("cleaning_standard").default("appa_2").notNull(),
 });
 
-// Rooms: id, object_id, type (office, bathroom, corridor), area_sqm.
+// Rooms: id, object_id, type (predefined + custom), area_sqm.
 export const rooms = pgTable("rooms", {
   id: serial("id").primaryKey(),
   object_id: integer("object_id").references(() => objects.id, { onDelete: 'cascade' }).notNull(),
-  type: text("type", { enum: ["office", "bathroom", "corridor"] }).notNull(),
+  type: text("type").notNull(),
   area_sqm: integer("area_sqm").notNull(),
 });
 
@@ -130,6 +130,39 @@ export const geofenceViolations = pgTable("geofence_violations", {
   created_at: timestamp("created_at").defaultNow(),
 });
 
+// Object sessions: cleaner check-in/out at object level + current geofence state
+export const objectSessions = pgTable("object_sessions", {
+  id: serial("id").primaryKey(),
+  object_id: integer("object_id").references(() => objects.id, { onDelete: 'cascade' }).notNull(),
+  cleaner_id: integer("cleaner_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  status: text("status", { enum: ["active", "closed"] }).default("active").notNull(),
+  checkin_at: timestamp("checkin_at").defaultNow().notNull(),
+  checkout_at: timestamp("checkout_at"),
+  last_presence_at: timestamp("last_presence_at").defaultNow().notNull(),
+  current_inside_geofence: boolean("current_inside_geofence").default(true).notNull(),
+  last_distance_meters: numeric("last_distance_meters", { precision: 10, scale: 2 }),
+  last_latitude: numeric("last_latitude", { precision: 10, scale: 8 }),
+  last_longitude: numeric("last_longitude", { precision: 11, scale: 8 }),
+});
+
+// Object presence segments: contiguous inside/outside intervals for accurate time accounting
+export const objectPresenceSegments = pgTable("object_presence_segments", {
+  id: serial("id").primaryKey(),
+  session_id: integer("session_id").references(() => objectSessions.id, { onDelete: 'cascade' }).notNull(),
+  object_id: integer("object_id").references(() => objects.id, { onDelete: 'cascade' }).notNull(),
+  cleaner_id: integer("cleaner_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  is_inside: boolean("is_inside").notNull(),
+  start_at: timestamp("start_at").notNull(),
+  end_at: timestamp("end_at"),
+  start_distance_meters: numeric("start_distance_meters", { precision: 10, scale: 2 }),
+  end_distance_meters: numeric("end_distance_meters", { precision: 10, scale: 2 }),
+  start_latitude: numeric("start_latitude", { precision: 10, scale: 8 }),
+  start_longitude: numeric("start_longitude", { precision: 11, scale: 8 }),
+  end_latitude: numeric("end_latitude", { precision: 10, scale: 8 }),
+  end_longitude: numeric("end_longitude", { precision: 11, scale: 8 }),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
 // Feedback: id, object_id, client_id, rating, text.
 export const feedback = pgTable("feedback", {
   id: serial("id").primaryKey(),
@@ -137,6 +170,31 @@ export const feedback = pgTable("feedback", {
   client_id: integer("client_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
   rating: integer("rating").notNull(),
   text: text("text"),
+});
+
+// Client service requests: client-submitted object + task demand with gps metadata.
+export const clientServiceRequests = pgTable("client_service_requests", {
+  id: serial("id").primaryKey(),
+  client_id: integer("client_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  company_id: integer("company_id").references(() => companies.id, { onDelete: 'cascade' }).notNull(),
+  status: text("status", { enum: ["pending", "accepted", "rejected"] }).default("pending").notNull(),
+  object_address: text("object_address").notNull(),
+  object_description: text("object_description"),
+  latitude: numeric("latitude", { precision: 10, scale: 8 }),
+  longitude: numeric("longitude", { precision: 11, scale: 8 }),
+  location_accuracy_meters: numeric("location_accuracy_meters", { precision: 10, scale: 2 }),
+  geofence_radius_meters: integer("geofence_radius_meters").default(100).notNull(),
+  easy_setup_usage: text("easy_setup_usage", { enum: ["quiet", "normal", "busy"] }).default("normal").notNull(),
+  recommended_cleaning_standard: text("recommended_cleaning_standard").default("appa_3").notNull(),
+  requested_tasks: jsonb("requested_tasks").notNull(),
+  client_note: text("client_note"),
+  decision_note: text("decision_note"),
+  created_object_id: integer("created_object_id").references(() => objects.id, { onDelete: 'set null' }),
+  assigned_supervisor_id: integer("assigned_supervisor_id").references(() => users.id, { onDelete: 'set null' }),
+  assigned_cleaner_id: integer("assigned_cleaner_id").references(() => users.id, { onDelete: 'set null' }),
+  reviewed_by: integer("reviewed_by").references(() => users.id, { onDelete: 'set null' }),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  reviewed_at: timestamp("reviewed_at"),
 });
 
 // Questionnaire responses: stores adaptive questionnaire answers per task
@@ -156,6 +214,7 @@ export const companiesRelations = relations(companies, ({many}) => ({
   users: many(users),
   objects: many(objects),
   checklistTemplates: many(checklistTemplates),
+  clientServiceRequests: many(clientServiceRequests),
 }));
 
 export const usersRelations = relations(users, ({one, many}) => ({
@@ -165,12 +224,21 @@ export const usersRelations = relations(users, ({one, many}) => ({
   feedback: many(feedback),
   syncOperations: many(syncOperations),
   questionnaireResponses: many(questionnaireResponses),
+  objectSessions: many(objectSessions),
+  objectPresenceSegments: many(objectPresenceSegments),
+  clientServiceRequests: many(clientServiceRequests, {relationName: "client_service_request_client"}),
+  assignedServiceRequestsAsSupervisor: many(clientServiceRequests, {relationName: "client_service_request_supervisor"}),
+  assignedServiceRequestsAsCleaner: many(clientServiceRequests, {relationName: "client_service_request_cleaner"}),
+  reviewedServiceRequests: many(clientServiceRequests, {relationName: "client_service_request_reviewer"}),
 }));
 
 export const objectsRelations = relations(objects, ({one, many}) => ({
   company: one(companies, {fields: [objects.company_id], references: [companies.id]}),
   rooms: many(rooms),
   feedback: many(feedback),
+  objectSessions: many(objectSessions),
+  objectPresenceSegments: many(objectPresenceSegments),
+  clientServiceRequests: many(clientServiceRequests),
 }));
 
 export const roomsRelations = relations(rooms, ({one, many}) => ({
@@ -216,9 +284,46 @@ export const geofenceViolationsRelations = relations(geofenceViolations, ({one})
   cleaner: one(users, {fields: [geofenceViolations.cleaner_id], references: [users.id]}),
 }));
 
+export const objectSessionsRelations = relations(objectSessions, ({one, many}) => ({
+  object: one(objects, {fields: [objectSessions.object_id], references: [objects.id]}),
+  cleaner: one(users, {fields: [objectSessions.cleaner_id], references: [users.id]}),
+  segments: many(objectPresenceSegments),
+}));
+
+export const objectPresenceSegmentsRelations = relations(objectPresenceSegments, ({one}) => ({
+  session: one(objectSessions, {fields: [objectPresenceSegments.session_id], references: [objectSessions.id]}),
+  object: one(objects, {fields: [objectPresenceSegments.object_id], references: [objects.id]}),
+  cleaner: one(users, {fields: [objectPresenceSegments.cleaner_id], references: [users.id]}),
+}));
+
 export const feedbackRelations = relations(feedback, ({one}) => ({
   object: one(objects, {fields: [feedback.object_id], references: [objects.id]}),
   client: one(users, {fields: [feedback.client_id], references: [users.id]}),
+}));
+
+export const clientServiceRequestsRelations = relations(clientServiceRequests, ({one}) => ({
+  company: one(companies, {fields: [clientServiceRequests.company_id], references: [companies.id]}),
+  client: one(users, {
+    relationName: "client_service_request_client",
+    fields: [clientServiceRequests.client_id],
+    references: [users.id]
+  }),
+  createdObject: one(objects, {fields: [clientServiceRequests.created_object_id], references: [objects.id]}),
+  assignedSupervisor: one(users, {
+    relationName: "client_service_request_supervisor",
+    fields: [clientServiceRequests.assigned_supervisor_id],
+    references: [users.id]
+  }),
+  assignedCleaner: one(users, {
+    relationName: "client_service_request_cleaner",
+    fields: [clientServiceRequests.assigned_cleaner_id],
+    references: [users.id]
+  }),
+  reviewer: one(users, {
+    relationName: "client_service_request_reviewer",
+    fields: [clientServiceRequests.reviewed_by],
+    references: [users.id]
+  }),
 }));
 
 export const questionnaireResponsesRelations = relations(questionnaireResponses, ({one}) => ({

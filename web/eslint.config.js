@@ -12,6 +12,17 @@ const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
 
 export default defineConfig(
 	includeIgnoreFile(gitignorePath),
+	{
+		ignores: [
+			'.svelte-kit/**',
+			'build/**',
+			'dist/**',
+			'node_modules/**',
+			'android/**',
+			'ios/**',
+			'src/paraglide/**'
+		]
+	},
 	js.configs.recommended,
 	...ts.configs.recommended,
 	...svelte.configs.recommended,

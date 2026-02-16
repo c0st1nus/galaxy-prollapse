@@ -15,7 +15,9 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" type="image/svg+xml" href={favicon} />
+	<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 </svelte:head>
 
 <div class="min-h-screen bg-[var(--bg-app)] text-[var(--text-main)]">
@@ -25,8 +27,8 @@
 
 	<div
 		class={isImmersiveRoute
-			? 'min-h-[100dvh] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]'
-			: 'pt-[calc(4rem+env(safe-area-inset-top))] pb-[calc(5rem+env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:pt-0 md:pb-0'}
+			? 'min-h-[100dvh] pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]'
+			: 'pt-[calc(4rem+env(safe-area-inset-top))] pr-[env(safe-area-inset-right)] pb-[calc(5rem+env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] md:pt-0 md:pb-0'}
 	>
 		{@render children()}
 	</div>
