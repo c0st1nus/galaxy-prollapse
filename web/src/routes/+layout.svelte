@@ -13,5 +13,9 @@
 <div class="min-h-screen bg-[var(--bg-app)] text-[var(--text-main)]">
 	<AppHeader />
 
-	{@render children()}
+	<div
+		class="pt-[calc(4rem+env(safe-area-inset-top))] pb-[calc(5rem+env(safe-area-inset-bottom))] md:pt-0 md:pb-0"
+	>
+		{@render children()}
+	</div>
 </div>
