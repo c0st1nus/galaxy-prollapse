@@ -2,66 +2,24 @@
 #   docker compose up -d                      # postgres + minio
 #   docker compose --profile full up -d       # postgres + minio + backend
 services:
-  db:
-    image: postgres:15-alpine
-    container_name: td-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-cleaning_db}
-      POSTGRES_USER: ${POSTGRES_USER:-user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+    db:
+        image: postgres:15-alpine
+        container_name: td-postgres
+        environment:
+            POSTGRES_DB: cleaning_db
+            POSTGRES_USER: user
+            POSTGRES_PASSWORD: password
+        ports:
+            - "5422:5432"
+        volumes:
+            - ./.internal_data/postgres/data:/var/lib/postgresql/data
 
-  minio:
-    image: minio/minio
-    container_name: td-minio
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
-    command: server /data --console-address ":9001"
-    ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    volumes:
-      - minio_data:/data
-
-  # Optional: containerized backend (full profile)
-  backend:
-    profiles: ["full"]
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: td-backend
-    restart: unless-stopped
-    env_file:
-      - ./backend/.env
-    environment:
-      PORT: ${PORT:-3000}
-      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-cleaning_db}}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT_DOCKER:-minio}
-      MINIO_PORT: ${MINIO_INTERNAL_PORT:-9000}
-      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-      MINIO_BUCKET: ${MINIO_BUCKET:-school-hackathon}
-      MINIO_PUBLIC_BASE_URL: ${MINIO_PUBLIC_BASE_URL:-}
-    ports:
-      - "${PORT:-3000}:${PORT:-3000}"
-    depends_on:
-      db:
-        condition: service_healthy
-      minio:
-        condition: service_started
-
-volumes:
-  pg_data:
-  minio_data:
+    minio:
+        image: minio/minio
+        container_name: td-minio
+        command: server /data --console-address ":9005"
+        ports:
+            - "9005:9000"
+            - "9006:9001"
+        volumes:
+            - ./.internal_data/minio/data:/data
