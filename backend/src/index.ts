@@ -5,6 +5,7 @@ import {cleanerRoutes} from "./routes/cleaner";
 import {supervisorRoutes} from "./routes/supervisor";
 import {adminRoutes} from "./routes/admin";
 import {feedbackRoutes} from "./routes/feedback";
+import {syncRoutes} from "./routes/sync";
 import {config} from "./utils/config";
 import {runMigrations} from "./database/migrate";
 
@@ -15,6 +16,7 @@ const app = new Elysia()
   .get("/", () => "School Hackathon Backend API")
   .use(authRoutes)
   .use(cleanerRoutes)
+  .use(syncRoutes)
   .use(supervisorRoutes)
   .use(adminRoutes)
     .use(feedbackRoutes)
