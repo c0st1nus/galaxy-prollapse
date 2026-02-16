@@ -8,7 +8,8 @@
     "build": "bun build src/index.ts --outdir dist --target bun",
     "prod": "bun run build && bun run dist/index.js",
     "generate": "drizzle-kit generate",
-    "migrate": "drizzle-kit migrate"
+    "migrate": "drizzle-kit migrate",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.1",

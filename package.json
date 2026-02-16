@@ -14,9 +14,15 @@
     "start": "concurrently \"bun run start:back\" \"bun run start:front\"",
     "start:back": "bun run backend/dist/index.js",
     "start:front": "cd web && bun run preview && cd ..",
-    "install:all": "bun install && concurrently \"cd backend && bun install\" \"cd web && bun install\""
+    "install:all": "bun install && concurrently \"cd backend && bun install\" \"cd web && bun install\"",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop all",
+    "pm2:delete": "pm2 delete all",
+    "pm2:logs": "pm2 logs",
+    "pm2:monit": "pm2 monit"
   },
   "devDependencies": {
-    "concurrently": "latest"
+    "concurrently": "latest",
+    "pm2": "^6.0.14"
   }
 }
